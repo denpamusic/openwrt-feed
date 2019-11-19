@@ -1,0 +1,5 @@
+###############################################################################
+# Extra config added by vpngate.sh below this line
+
+;fast-io
+;resolv-retry infinite

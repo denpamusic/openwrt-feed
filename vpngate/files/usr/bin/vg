@@ -1,0 +1,236 @@
+#!/bin/sh
+
+###
+# vpngate.net client for OpenWRT
+#
+# This script allows to pull server list from vpngate public VPN server registry and filter
+# it by country, score, maximum ping and uptime.
+#
+# Once server that matches requested criteria found, script will setup openvpn
+# instance via UCI and perform connection test.
+#
+# Extra config for openvpn can be added to /etc/vpngate.include.
+#
+# Examples:
+# find any working server and setup openvpn instance with default name (vpngate):
+# vg
+#
+# find server in the United States and setup openvpn instance named us01:
+# vg -c us us01
+#
+# find server in the United States and setup openvpn instance named us01 in disabled state:
+# vg -c us -d us01
+#
+# find server in the United States or Great Britain, if none available, fallback to any location:
+# vg -c us,gb,any
+#
+# find any server with ping that is less than 20 ms:
+# vg -p 20
+#
+# find any server in Japan with ping that is less than 30 ms:
+# vg -c jp -p 30
+#
+# force server list update and find any server with score greater than 10000:
+# vg -U -s 10000
+##
+
+ServerList="http://www.vpngate.net/api/iphone/"
+ConfigDir="/tmp/vpngate"
+
+help() {
+	cat <<EOF
+Syntax: $0 [OPTIONS] instance
+	-c, --country		select servers from specified country.
+				can be list of countries separated by comma (,)
+
+	-p, --max-ping		select servers below specified ping
+	-s, --min-score		select servers above specified score
+	-u, --min-uptime	select servers with uptime above specified value
+	-x, --exclude		exclude ip from search
+	-U, --update		update server list from vpngate.net
+	-d, --disabled		setup instance in disabled state (implies --no-restart)
+	-r, --randomize		randomize server list (requires coreutils-shuf package)
+	--no-test		don't perform connection test on the selected server
+	--no-setup		don't setup openvpn instance via UCI after selecting the server
+	--no-restart		don't restart openvpn instance after selecting the server
+	--test-host		send ICMP request to specified host to test connection (default is 8.8.8.8)
+	-h, --help		display help screen
+EOF
+}
+
+check_connection() {
+	local iface="$1"
+	ret=$(ping -qI "$iface" -c 1 -W 5 "$TEST_HOST" 2>/dev/null) || return 1
+	echo "$ret" | tail -2
+}
+
+check_server() {
+	local pid
+	local iface
+	local rc=1
+	local seconds=0
+	local tmpfile="$ConfigDir/check-status-$$"
+
+	echo "Setting up connection test..."
+	openvpn --config "$ConfigDir/$INSTANCE.check" --cd "$ConfigDir" --route-nopull >"$tmpfile" 2>&1 &
+	pid=$!
+	while true
+	do
+		sleep 1
+		[ $seconds -gt 10 ] && break
+		grep -q "Initialization Sequence Completed" "$tmpfile" && {
+			iface=$(grep -om1 "tun[0-9]*" "$tmpfile") || break
+			echo "Doing connection test on $iface..."
+			check_connection "$iface" && rc=0 && break
+		}
+		seconds=$(( seconds + 1 ))
+	done
+
+	kill "$pid" >/dev/null 2>&1
+	rm -f "$tmpfile"
+	return "$rc"
+}
+
+setup_openvpn() {
+	local enabled="0"
+	[ "$SETUP_ENABLED" == "yes" ] && enabled="1"
+	echo "Setting up OpenVPN instance [$INSTANCE, enabled=$SETUP_ENABLED]..."
+	uci set openvpn."$INSTANCE"=openvpn
+	uci set openvpn."$INSTANCE".enabled="$enabled"
+	uci set openvpn."$INSTANCE".config="$ConfigDir/$INSTANCE.conf"
+	uci commit openvpn
+}
+
+restart_openvpn() {
+	echo "Restarting OpenVPN instance [$INSTANCE]..."
+	/etc/init.d/openvpn restart "$INSTANCE"
+}
+
+update_serverlist() {
+	echo "Updating server list from $ServerList..."
+	uclient-fetch -qO - "$ServerList" | sed -e '1,2d' | head -n -1 > "$ConfigDir/servers.csv"
+}
+
+search_serverlist() {
+	local rc=1
+	local match=1
+	local current=1
+	local country="$1"
+	local total=$(cat "$ConfigDir/servers.csv" | wc -l)
+	local cat="/bin/cat"
+	[ "$RANDOMIZE" == "yes" ] && [ -f "/usr/bin/shuf" ] && cat="/usr/bin/shuf"
+	$cat "$ConfigDir/servers.csv" | while IFS=',' read -r \
+	HostName IP Score Ping Speed CountryLong CountryShort \
+	NumVpnSessions Uptime TotalUsers TotalTraffic LogType Operator Message OpenVPNConfig
+	do
+		match=1
+		echo "$current/$total: $IP"
+		current=$(( current + 1 ))
+		[ "x$EXCLUDES" != "x" ] && echo "$EXCLUDES" | grep -q "$IP" && continue
+		[ "$country" != "any" ] && [ "$CountryShort" != "$country" ] && match=0
+		[ "$SCORE"   != "any" ] && [ "$Score"  -lt "$SCORE" ]        && match=0
+		[ "$PING"    != "any" ] && [ "$Ping"   -gt "$PING" ]         && match=0
+		[ "$UPTIME"  != "any" ] && [ "$Uptime" -lt "$UPTIME" ]       && match=0
+		[ "$match" == "0" ] && continue
+		echo "Selected $IP, Country: $CountryShort, Score: $Score, Ping: $Ping ms, Uptime: $Uptime seconds..."
+		echo "$OpenVPNConfig" | base64 -di > "$ConfigDir/$INSTANCE.check" || exit 0
+		[ -f "/etc/vpngate.include" ] && cat "/etc/vpngate.include" >>"$ConfigDir/$INSTANCE.check"
+		[ "$TEST" == "yes" ] && check_server || {
+			echo "$IP failed connection test, continuing search..."
+			continue
+		}
+		mv "$ConfigDir/$INSTANCE.check" "$ConfigDir/$INSTANCE.conf"
+		[ "$SETUP" == "yes" ] && setup_openvpn
+		[ "$RESTART" == "yes" ] && restart_openvpn
+		# use exit code to differentiate between loop exiting
+		# when server was found or when no more servers left
+		exit 1
+	done || rc=0
+
+	return "$rc"
+}
+
+select_server() {
+	local rc=1
+
+	cat <<EOL
+
+Instance:
+Name: $INSTANCE
+Setup: $SETUP
+Enabled: $SETUP_ENABLED
+Restart: $RESTART
+
+Server:
+Country: $COUNTRY
+Max-Ping: $PING
+Min-Score: $SCORE
+Min-Uptime: $UPTIME
+Test: $TEST
+
+List:
+Randomize: $RANDOMIZE
+Exclude: $EXCLUDES
+
+EOL
+
+	mkdir -p "$ConfigDir"
+
+	# download server list, if none exists or if "--update" flag is used
+	[ "$UPDATE" == "yes" ] || [ ! -f "$ConfigDir/servers.csv" ] && update_serverlist
+
+	OLD_IFS="$IFS"
+	IFS=","
+	for CountryCode in $COUNTRY
+	do
+		case "$CountryCode" in
+			[aA][nN][yY]) CountryCode="any";;
+			*) CountryCode=$(echo "$CountryCode" | tr "a-z" "A-Z");;
+		esac
+		echo "Searching for matching servers in $CountryCode..."
+		search_serverlist "$CountryCode" && rc=0 && break
+		echo
+	done
+	IFS="$OLD_IFS"
+
+	[ "$rc" == "1" ] && echo "No servers matching requested parameters found. Please try with different parameters."
+	rm -f "$ConfigDir/$INSTANCE.check"
+	exit "$rc"
+}
+
+INSTANCE="vpngate"
+COUNTRY="any"
+SCORE="any"
+PING="any"
+UPTIME="any"
+EXCLUDES=""
+UPDATE="no"
+SETUP="yes"
+SETUP_ENABLED="yes"
+TEST="yes"
+TEST_HOST=8.8.8.8
+RESTART="yes"
+RANDOMIZE="no"
+
+while true
+do
+	case "$1" in
+		-c|--country) COUNTRY="$2"; shift;;
+		-p|--max-ping) PING="$2"; shift;;
+		-s|--min-score) SCORE="$2"; shift;;
+		-u|--min-uptime) UPTIME="$2"; shift;;
+		-x|--exclude) EXCLUDES="$EXCLUDES $2"; shift;;
+		-U|--update) UPDATE="yes";;
+		-d|--disabled) SETUP_ENABLED="no"; RESTART="no";;
+		-r|--randomize) RANDOMIZE="yes";;
+		--no-setup) SETUP="no";;
+		--no-test) TEST="no";;
+		--no-restart) RESTART="no";;
+		--test-host) TEST_HOST="$2"; shift;;
+		-h|-?|--help) help && exit 1;;
+		*) [ -n "$1" ] && INSTANCE="$1"; break;;
+	esac
+	shift
+done
+
+select_server

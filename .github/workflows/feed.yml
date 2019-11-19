@@ -1,0 +1,60 @@
+name: OpenWRT feed
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    steps:
+    - name: Set up environment
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y install subversion build-essential libncurses5-dev zlib1g-dev gawk git ccache gettext libssl-dev xsltproc zip
+    - name: Prepare OpenWRT buildroot and feeds
+      run: |
+        git clone https://github.com/openwrt/openwrt.git
+        cd openwrt
+        cp feeds.conf.default feeds.conf
+        echo src-git denpamusic https://github.com/denpamusic/openwrt-feed.git >> feeds.conf
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a -p denpamusic
+    - name: Create config
+      run: |
+        cd openwrt
+        for PKG in $(ls ./package/feeds/denpamusic/); do
+          echo CONFIG_PACKAGE_"$PKG"=m >> .config
+        done
+        make defconfig
+    - name: Install toolchain
+      run: |
+        cd openwrt
+        make -j$(nproc) tools/install
+        make -j$(nproc) toolchain/install
+    - name: Install key
+      run: |
+        cd openwrt
+        echo "${USIGN_KEY}" > ./key-build
+        wget -O key-build.pub http://openwrt.denpa.pro/keys/4b148d164b058d87
+      env:
+        USIGN_KEY: ${{ secrets.USIGN_KEY }}
+    - name: Build packages
+      run: |
+        cd openwrt
+        make package/system/usign/host/compile
+        for PKG in $(ls ./package/feeds/denpamusic/); do
+          IGNORE_ERRORS=1 make -j$(nproc) package/"$PKG"/compile
+        done
+        make package/index
+    - name: Create repository
+      run: |
+        mkdir -p public/packages
+        PKGROOT=$(find openwrt/bin -type d -name denpamusic)
+        cp -r "$PKGROOT/"* public/packages
+    - name: Deploy repository
+      if: success()
+      uses: crazy-max/ghaction-github-pages@v1
+      with:
+        target_branch: gh-pages
+        build_dir: public
+        keep_history: true
+        commit_message: Deploy repository
+      env:
+        GITHUB_PAT: ${{ secrets.GITHUB_PAT }}

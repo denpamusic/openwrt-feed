@@ -1,0 +1,66 @@
+#!/bin/sh
+
+. /lib/antifilter/antifilter.sh
+
+help() {
+	cat <<EOF
+Syntax: antifilter [command]
+Available commands:
+	start                Start antifilter updater and loads ipsets
+	stop                 Stop antifilter updater
+	restart              Restart antifilter updater
+	remove               Removes antifilter ipsets
+	update               Update antifilter ipsets
+	lookup <host or ip>  Lookup hostname or ip in ipsets
+	status               List loaded ipsets
+	dump                 Dump antifilter ipsets
+EOF
+}
+
+start() {
+	/etc/init.d/antifilter start
+}
+
+stop() {
+	/etc/init.d/antifilter stop
+}
+
+restart() {
+	/etc/init.d/antifilter restart
+}
+
+status() {
+	antifilter_status
+}
+
+remove() {
+	stop
+	antifilter_remove
+}
+
+update() {
+	antifilter_update
+	antifilter_status_ipsets
+}
+
+lookup() {
+	antifilter_lookup "$@"
+}
+
+dump() {
+	antifilter_dump
+}
+
+case "$1" in
+	start|stop|restart|run|remove|update|lookup|status|dump)
+		"$@"
+	;;
+	--daemon)
+		antifilter_daemon
+	;;
+	*)
+		help
+	;;
+esac
+
+exit 0

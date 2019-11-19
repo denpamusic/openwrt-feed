@@ -1,0 +1,15 @@
+config antifilter 'antifilter'
+    list source 'https://antifilter.download/list'
+    option interval '720'
+
+config ipset 'subnet'
+    option prefix 'antifilter'
+    option file 'subnet.lst'
+    option type 'hash:net'
+    option enabled '1'
+
+config ipset 'ipsum'
+    option prefix 'antifilter'
+    option file 'ipsum.lst'
+    option type 'hash:net'
+    option enabled '1'
