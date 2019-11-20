@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=antifilter
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=Denis Paavilainen <denpa@denpa.pro>
 PKG_LICENSE:=MIT
@@ -31,7 +31,7 @@ define Package/antifilter/description
 endef
 
 define Package/antifilter/conffiles
-	/etc/config/antifilter
+/etc/config/antifilter
 endef
 
 define Build/Compile
