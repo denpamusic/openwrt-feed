@@ -15,9 +15,9 @@ Syntax: $0 [OPTIONS] instance
 
 	-p, --max-ping		select servers below specified ping
 	-s, --min-score		select servers above specified score
-	-u, --min-uptime	select servers with uptime above specified value
+	-t, --min-uptime	select servers with uptime above specified value
 	-x, --exclude		exclude ip from search
-	-U, --update		update server list from vpngate.net
+	-u, --update		update server list from vpngate.net
 	-d, --disabled		setup instance in disabled state (implies --no-restart)
 	-r, --randomize		randomize server list (requires coreutils-shuf package)
 	--no-test		don't perform connection test on the selected server
@@ -47,7 +47,7 @@ check_server() {
 	while true
 	do
 		sleep 1
-		[ $seconds -gt 10 ] && break
+		[ $seconds -ge 10 ] && break
 		grep -q "Initialization Sequence Completed" "$tmpfile" && {
 			iface=$(grep -om1 "tun[0-9]*" "$tmpfile") || break
 			echo "Doing connection test on $iface..."
@@ -188,9 +188,9 @@ do
 		-c|--country) COUNTRY="$2"; shift;;
 		-p|--max-ping) PING="$2"; shift;;
 		-s|--min-score) SCORE="$2"; shift;;
-		-u|--min-uptime) UPTIME="$2"; shift;;
+		-t|--min-uptime) UPTIME="$2"; shift;;
 		-x|--exclude) EXCLUDES="$EXCLUDES $2"; shift;;
-		-U|--update) UPDATE="yes";;
+		-u|--update) UPDATE="yes";;
 		-d|--disabled) SETUP_ENABLED="no"; RESTART="no";;
 		-r|--randomize) RANDOMIZE="yes";;
 		--no-setup) SETUP="no";;
