@@ -1,5 +1,5 @@
-# openwrt-feed
- OpenWRT feed by denpamusic
+# openwrt-feed ![OpenWRT feed](https://github.com/denpamusic/openwrt-feed/workflows/OpenWRT%20feed/badge.svg?branch=master)  
+OpenWRT feed by denpamusic
 
 ## Buildroot
 ```bash
