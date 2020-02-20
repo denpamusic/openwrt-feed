@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=vpngate
 PKG_VERSION:=1.0.2
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_MAINTAINER:=Denis Paavilainen <denpa@denpa.pro>
 PKG_LICENSE:=MIT
@@ -21,7 +21,7 @@ define Package/vpngate
   CATEGORY:=Network
   DEPENDS:=+coreutils +coreutils-shuf +openvpn
   TITLE:=vpngate.net client
-  URL:=https://github.com/denpamusic/openwrt-vpngate
+  URL:=https://github.com/denpamusic/openwrt-feed
   SUBMENU:=VPN
   PKGARCH:=all
 endef
