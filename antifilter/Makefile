@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=antifilter
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 PKG_MAINTAINER:=Denis Paavilainen <denpa@denpa.pro>
 PKG_LICENSE:=MIT
@@ -21,7 +21,7 @@ define Package/antifilter
   CATEGORY:=Network
   DEPENDS:=+ipset
   TITLE:=Antifilter ipset managment utility
-  URL:=https://github.com/denpamusic/openwrt-antifilter
+  URL:=https://github.com/denpamusic/openwrt-feed
   PKGARCH:=all
 endef
 
