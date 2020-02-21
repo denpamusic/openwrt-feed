@@ -9,6 +9,8 @@ jobs:
     steps:
     - name: Set up environment
       run: |
+        sudo rm /etc/apt/sources.list.d/microsoft-prod.list
+        sudo rm /etc/apt/sources.list.d/microsoft-prod.list.save
         sudo apt-get -y update
         sudo apt-get -y install subversion build-essential libncurses5-dev zlib1g-dev gawk git ccache gettext libssl-dev xsltproc zip
     - name: Prepare OpenWRT buildroot and feeds
