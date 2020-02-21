@@ -5,7 +5,6 @@ local function trim(s)
 end
 
 local LcdProc = { sock = nil, server = {}, lcd = {} }
-
 LcdProc.__index = LcdProc
 
 function LcdProc.new(host, port)
@@ -18,7 +17,7 @@ function LcdProc.new(host, port)
     self:hello()
     return self
   end
-  print('Sock Error: ' .. err)
+  print("Sock Error: " .. err)
 end
 
 function LcdProc:send(str)
@@ -41,7 +40,7 @@ function LcdProc:hello()
   self:send("hello")
   local ret = self:receive()
   if ret then
-    -- set non-blocking mode
+    -- switch to non-blocking mode
     self.sock:settimeout(0)
     self.server = {
       version = string.match(ret, "LCDproc ([0-9\.]+)"),
@@ -61,7 +60,7 @@ function LcdProc:attributes_str(attrs)
   for k, v in pairs(attrs) do
     str = str .. " -" .. k .. ' "' .. v .. '"'
   end
-  -- remove first space an return string
+  -- remove leading space and return string
   return string.sub(str, 2, #str)
 end
 
@@ -82,7 +81,11 @@ function LcdProc:screen_set(screen_id, attrs)
 end
 
 function LcdProc:widget_add(screen_id, new_widget_id, widgettype, frame_id)
-  local str = "widget_add " .. screen_id .. " " .. new_widget_id .. " " .. widgettype
+  local str = string.format("widget_add %s %s %s",
+    screen_id,
+    new_widget_id,
+    widgettype
+  )
   if frame_id then
     str = str .. " -in " .. frame_id
   end
@@ -94,7 +97,11 @@ function LcdProc:widget_del(screen_id, widget_id)
 end
 
 function LcdProc:widget_set(screen_id, widget_id, widgettype_specific_parameters)
-  self:send("widget_set " .. screen_id .. " " .. widget_id .. " " .. widgettype_specific_parameters)
+  self:send(string.format("widget_set %s %s %s",
+    screen_id,
+    widget_id,
+    widgettype_specific_parameters
+  ))
 end
 
 function LcdProc:client_add_key(key, mode)
@@ -106,7 +113,7 @@ function LcdProc:client_del_key(key)
 end
 
 function LcdProc:menu_add_item(menu_id, new_item_id, type)
-  self:send("menu_add_item " .. menu_id .. " " .. new_item_id .. " " .. type)
+  self:send(string.format("menu_add_item %s %s %s", menu_id, new_item_id, type))
 end
 
 function LcdProc:menu_del_item(menu_id, item_id)
@@ -114,7 +121,11 @@ function LcdProc:menu_del_item(menu_id, item_id)
 end
 
 function LcdProc:menu_set_item(menu_id, item_id, attrs)
-  self:send("menu_set_item " .. menu_id .. " " .. item_id .. " " .. self:attributes_str(attrs))
+  self:send(string.format("menu_set_item %s %s %s",
+    menu_id,
+    item_id,
+    self:attributes_str(attrs)
+  ))
 end
 
 function LcdProc:menu_goto(menu_id, parent_id)
@@ -134,7 +145,7 @@ function LcdProc:noop()
 end
 
 function LcdProc:close()
-  self:request("bye")
+  self:send("bye")
   self.sock:close()
 end
 
