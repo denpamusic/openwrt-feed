@@ -1,5 +1,5 @@
-local socket = require "socket"
 local cjson = require "cjson"
+local socket = require "socket"
 
 local CgMiner = { sock = nil }
 CgMiner.__index = CgMiner
@@ -13,7 +13,7 @@ function CgMiner.new(host, port)
   if ret then
     return self
   end
-  print('Sock Error: ' .. err)
+  print("Sock Error: " .. err)
 end
 
 function CgMiner:prepare(command, parameter)
@@ -31,11 +31,11 @@ function CgMiner:decode(json)
   local data = cjson.decode(json)
   local dt = {}
   for k, v in pairs(data) do
-    if k ~= "STATUS" and type(v) == 'table' then
-      dt = v
-    
+    if k ~= "STATUS" and type(v) == "table" then
       if v[1][string.upper(k)] then
         dt[string.lower(k)] = v[1][string.upper(k)]
+      else
+        dt = v
       end
     end
   end
@@ -44,11 +44,10 @@ end
 
 function CgMiner:receive()
   if self.sock then
-    local ret = self.sock:receive('*a')
-    if not ret then
-      return false
+    local ret = self.sock:receive("*a")
+    if ret then
+      return self:decode(ret:sub(1, -2))
     end
-    return self:decode(ret:sub(1, -2))
   end
 end
 
