@@ -1,0 +1,9 @@
+config lcdproc 'lcdproc'
+    option host 'localhost'
+    option port 13666
+    list screen 'Rates'
+    list screen 'Temps'
+
+config cgminer 'cgminer'
+    option host 'localhost'
+    option port 4028
