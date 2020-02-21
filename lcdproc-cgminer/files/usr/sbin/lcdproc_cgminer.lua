@@ -34,21 +34,31 @@ local function cgminer_config()
 end
 
 local function cgminer_stats()
-  local rates = {}
-  local temps = {}
+  local dt = { ["Total"] = {}, ["Rates"] = {}, ["Temps"] = {}, ["Fans"] = {} }
   local cgminer = CgMiner.new(cgminer_config())
-  cgminer:send("stats")
+  cgminer:send("stats+fanctrl")
   local stats = cgminer:receive()
-  if stats and stats[2] then
+  if stats and stats['stats'][2] then
+    local s = stats['stats'][2]
+    dt["Total"] = {
+       string.format("Now: %s Gh/s", rpad(round(s["GHS 5s"], 1), 10)),
+       string.format("Avg: %s Gh/s", rpad(round(s["GHS av"], 1), 10)),
+       string.format("Ideal: %s Gh/s", rpad(round(s["total_rateideal"], 1), 8))
+    }
+    dt["Fans"] = {
+      string.format("Front: %s RPM", rpad(round(s["fan6"], 0), 9)),
+      string.format("Back: %s RPM", rpad(round(s["fan5"], 0), 10)),
+      string.format("Duty: %s %%", rpad(round(stats["fanctrl"][1]["Output"], 0), 12))
+    }
     for chain=6,8 do
-      local rate = rpad(round(stats[2]["chain_rate" .. chain], 1), 6)
-      local temp = rpad(round(stats[2]["temp2_" .. chain], 2), 8)
-      rates[chain-5] = string.format("Chain %u: %s Gh/s", chain, rate)
-      temps[chain-5] = string.format("Chain %u: %s C", chain, temp)
+      local rate = rpad(round(s["chain_rate" .. chain], 1), 6)
+      local temp = rpad(round(s["temp2_" .. chain], 2), 9)
+      dt["Rates"][chain-5] = string.format("Chain %u: %s Gh/s", chain, rate)
+      dt["Temps"][chain-5] = string.format("Chain %u: %s C", chain, temp)
     end
   end
   cgminer:close()
-  return { Rates = rates, Temps = temps }
+  return dt
 end
 
 local function update_screen(lcdproc, s, dt)
