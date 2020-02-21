@@ -20,19 +20,17 @@ end
 
 local function lcdproc_config()
   local curs = uci.cursor()
-  return unpack({
+  return
     curs:get("lcdproc", "lcdproc", "host") or "localhost",
     curs:get("lcdproc", "lcdproc", "port") or 13666,
     curs:get("lcdproc", "lcdproc", "screen") or {}
-  })
 end
 
 local function cgminer_config()
   local curs = uci.cursor()
-  return unpack({
+  return
     curs:get("lcdproc", "cgminer", "host") or "localhost",
     curs:get("lcdproc", "cgminer", "port") or 4028
-  })
 end
 
 local function cgminer_stats()
