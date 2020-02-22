@@ -8,7 +8,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=lcdproc-cgminer
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=Denis Paavilainen <denpa@denpa.pro>
@@ -19,7 +19,7 @@ include $(INCLUDE_DIR)/package.mk
 define Package/lcdproc-cgminer
   SECTION:=utils
   CATEGORY:=Utilities
-  DEPENDS:=+lua +luasocket +lua-cgminer +lua-lcdproc
+  DEPENDS:=+lua +lua-cgminer +lua-lcdproc
   TITLE:=cgminer lcdproc client
   URL:=https://github.com/denpamusic/openwrt-feed
   PKGARCH:=all

@@ -1,11 +1,24 @@
 config lcdproc 'lcdproc'
     option host 'localhost'
     option port 13666
-    list screen 'Total'
-    list screen 'Rates'
-    list screen 'Temps'
-    list screen 'Fans'
 
-config cgminer 'cgminer'
+config client 'cgminer'
+    option name 'CGMiner'
     option host 'localhost'
     option port 4028
+
+config screen 'total'
+    option client 'cgminer'
+    option duration 3
+    option heartbeat 'open'
+    option backlight 'open'
+    option priority 'info'
+
+config screen 'rates'
+    option client 'cgminer'
+
+config screen 'temps'
+    option client 'cgminer'
+
+config screen 'fans'
+    option client 'cgminer'
