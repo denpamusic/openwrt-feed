@@ -1,152 +1,150 @@
 local socket = require "socket"
+local utils = require "lcdproc/utils"
+local Screen = require "lcdproc/screen"
 
-local function trim(s)
-  return s:match "^%s*(.-)%s*$"
-end
-
-local LcdProc = { sock = nil, server = {}, lcd = {} }
+local LcdProc = {
+  sock = nil,
+  server = { version = nil, protocol = nil },
+  lcd = { width = nil, height = nil, cell_width = nil, cell_height = nil },
+  name = nil,
+  screens = {},
+  keys = {},
+  handlers = { listen = {}, ignore = {} }
+}
 LcdProc.__index = LcdProc
 
 function LcdProc.new(host, port)
-  port = port or 13666
   local self = setmetatable({}, LcdProc)
   self.sock = assert(socket.tcp())
   self.sock:settimeout(3)
-  local ret, err = self.sock:connect(host, port)
+  local ret, err = self.sock:connect((host or "localhost"), (port or 13666))
   if ret then
     self:hello()
     return self
   end
-  print("Sock Error: " .. err)
+  return nil, err
 end
 
-function LcdProc:send(str)
-  if self.sock then
-    self.sock:send(str .. "\n")
-  end
-end
+function LcdProc:request(line)
+  self.sock:send(utils.trim(line) .. "\n")
+  local line, err = self.sock:receive("*l")
 
-function LcdProc:receive()
-  if self.sock then
-    local ret = self.sock:receive("*l")
-    if not ret then
-      return false
+  if not line then
+    return nil, err
+  elseif line:match "^success" or line:match "^connect" then
+    return utils.trim(line)
+  else
+    err = line:match "huh%? (.*)"
+    if err then
+      return nil, err
     end
-    return trim(ret)
   end
 end
 
 function LcdProc:hello()
-  self:send("hello")
-  local ret = self:receive()
-  if ret then
-    -- switch to non-blocking mode
-    self.sock:settimeout(0)
+  local line = self:request("hello")
+  if line then
     self.server = {
-      version = string.match(ret, "LCDproc ([0-9\.]+)"),
-      protocol = string.match(ret, "protocol ([0-9\.]+)")
+      version = line:match "LCDproc ([0-9%.]+)",
+      protocol = line:match "protocol ([0-9%.]+)"
     }
     self.lcd = {
-      wid = string.match(ret, " wid ([0-9]+)"),
-      hgt = string.match(ret, " hgt ([0-9]+)"),
-      cellwid = string.match(ret, " cellwid ([0-9]+)"),
-      cellhgt = string.match(ret, " cellhgt ([0-9]+)")
+      width = line:match " wid ([0-9]+)",
+      height = line:match " hgt ([0-9]+)",
+      cell_width = line:match " cellwid ([0-9]+)",
+      cell_height = line:match " cellhgt ([0-9]+)"
     }
   end
 end
 
-function LcdProc:attributes_str(attrs)
-  local str = ""
-  for k, v in pairs(attrs) do
-    str = str .. " -" .. k .. ' "' .. v .. '"'
+function LcdProc:set_name(name)
+  if self:request(string.format("client_set name %s", name)) then
+    self.name = name
   end
-  -- remove leading space and return string
-  return string.sub(str, 2, #str)
 end
 
-function LcdProc:client_set(attrs)
-  self:send("client_set " .. self:attributes_str(attrs))
+function LcdProc:add_screen(id)
+  self.screens[id] = Screen.new(self, id)
+  return self.screens[id]
 end
 
-function LcdProc:screen_add(new_screen_id)
-  self:send("screen_add " .. new_screen_id)
-end
-
-function LcdProc:screen_del(screen_id)
-  self:send("screen_del " .. screen_id)
-end
-
-function LcdProc:screen_set(screen_id, attrs)
-  self:send("screen_set " .. screen_id .. " " .. self:attributes_str(attrs))
-end
-
-function LcdProc:widget_add(screen_id, new_widget_id, widgettype, frame_id)
-  local str = string.format("widget_add %s %s %s",
-    screen_id,
-    new_widget_id,
-    widgettype
-  )
-  if frame_id then
-    str = str .. " -in " .. frame_id
+function LcdProc:del_screen(id)
+  if self.screens[id] and self:request("screen_del " .. id) then
+    self.screens[id] = nil
   end
-  self:send(str)
 end
 
-function LcdProc:widget_del(screen_id, widget_id)
-  self:send("widget_del " .. screen_id .. " " .. widget_id)
-end
-
-function LcdProc:widget_set(screen_id, widget_id, widgettype_specific_parameters)
-  self:send(string.format("widget_set %s %s %s",
-    screen_id,
-    widget_id,
-    widgettype_specific_parameters
-  ))
-end
-
-function LcdProc:client_add_key(key, mode)
-  self:send("client_add_key -" .. mode .. " " .. key)
-end
-
-function LcdProc:client_del_key(key)
-  self:send("client_del_key " .. key)
-end
-
-function LcdProc:menu_add_item(menu_id, new_item_id, type)
-  self:send(string.format("menu_add_item %s %s %s", menu_id, new_item_id, type))
-end
-
-function LcdProc:menu_del_item(menu_id, item_id)
-  self:send("menu_del_item " .. menu_id .. " " .. item_id)
-end
-
-function LcdProc:menu_set_item(menu_id, item_id, attrs)
-  self:send(string.format("menu_set_item %s %s %s",
-    menu_id,
-    item_id,
-    self:attributes_str(attrs)
-  ))
-end
-
-function LcdProc:menu_goto(menu_id, parent_id)
-  local str = "menu_goto " .. menu_id
-  if parent_id then
-    str = str .. " " .. parent_id
+function LcdProc:add_key(id, mode)
+  mode = mode or "shared"
+  if not self.keys[id] then
+    if self:request(string.format("client_add_key -%s %s", id, mode)) then
+      self.keys[id] = id
+    end
   end
-  self:send(str)
 end
 
-function LcdProc:menu_set_main(menu_id)
-  self:send("menu_set_main " .. menu_id)
+function LcdProc:del_key(id)
+  if self.keys[id] then
+    if self:request("client_del_key " .. id) then
+      self.keys[id] = nil
+    end
+  end
+end
+
+function LcdProc:backlight(state)
+  return self:request("backlight " .. state)
+end
+
+function LcdProc:output(state)
+  return self:request("output " .. state)
+end
+
+function LcdProc:info()
+  return self:request("info")
 end
 
 function LcdProc:noop()
-  self:send("noop")
+  return self:request("noop")
+end
+
+function LcdProc:sleep(seconds)
+  return self:request("sleep " .. seconds)
 end
 
 function LcdProc:close()
-  self:send("bye")
+  self:request("bye")
   self.sock:close()
+end
+
+function LcdProc:on_listen(fn)
+  table.insert(self.handlers.listen, fn)
+end
+
+function LcdProc:on_ignore(fn)
+  table.insert(self.handlers.ignore, fn)
+end
+
+function LcdProc:poll()
+  local canread = socket.select({ self.sock }, nil, 1)
+  for _, c in ipairs(canread) do
+    local line, err = self.sock:receive("*l")
+    if line then
+      local listen = line:match "listen (%a+)"
+      if listen then
+        for _, fn in ipairs(self.handlers.listen) do
+          fn(self.screens[listen], self)
+        end
+      else
+        local ignore = line:match "ignore (%a+)"
+        if ignore then
+          for _, fn in ipairs(self.handlers.ignore) do
+            fn(self.screens[ignore], self)
+          end
+        end
+      end
+      return line, err
+    end
+  end
 end
 
 return LcdProc
