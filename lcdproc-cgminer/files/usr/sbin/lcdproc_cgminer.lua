@@ -1,11 +1,9 @@
 #!/usr/bin/env lua
 
 local uci = require "uci"
-local nixio = require "nixio"
 local CgMiner = require "cgminer"
 local LcdProc = require "lcdproc"
 
--- get uci cursor
 local curs = uci.cursor()
 
 local function rpad(s, l, c)
@@ -21,10 +19,6 @@ local function ucwords(s)
     return f:upper() .. r:lower()
   end)
   return ret
-end
-
-local function etos(t)
-	return t * 8
 end
 
 local function client_name()
@@ -44,95 +38,96 @@ local function cgminer_config()
 end
 
 local function screens_config()
-  local dt = {}
-  curs:foreach("lcdproc", "screen", function(s)
-    if s["client"] == "cgminer" then
-      dt[s[".name"]] = {
-        duration = etos(s["duration"] or 3),
-        heartbeat = s["heartbeat"] or "open",
-        backlight = s["backlight"] or "open",
-        priority = s["priority"] or "info"
-      }
+  local t = {}
+  curs:foreach("lcdproc", "screen", function (s)
+    if s.client == "cgminer" then
+      t[s[".name"]] = s
     end
   end)
-  return dt
+  return t
+end
+
+local function screen_total(s)
+  return {
+    string.format("Now: %s Gh/s", rpad(round(s[2]["GHS 5s"], 1), 10)),
+    string.format("Avg: %s Gh/s", rpad(round(s[2]["GHS av"], 1), 10)),
+    string.format("Ideal: %s Gh/s", rpad(round(s[2]["total_rateideal"], 1), 8))
+  }
+end
+
+local function screen_fans(s, f)
+  return {
+    string.format("Front: %s RPM", rpad(round(s[2]["fan6"], 0), 9)),
+    string.format("Back: %s RPM", rpad(round(s[2]["fan5"], 0), 10)),
+    string.format("Duty: %s %%", rpad(round(f[1]["Output"], 0), 12))
+  }
+end
+
+local function screen_rates(s)
+  local t = {}
+  for c=6,8 do
+    local rate = rpad(round(s[2]["chain_rate" .. c], 1), 6)
+    table.insert(t, string.format("Chain %i: %s Gh/s", c, rate))
+  end
+  return t
+end
+
+local function screen_temps(s)
+  local t = {}
+  for c=6,8 do
+    local temp = rpad(round(s[2]["temp2_" .. c], 1), 9)
+    table.insert(t, string.format("Chain %i: %s C", c, temp))
+  end
+  return t
 end
 
 local function cgminer_stats()
-  local dt = { ["total"] = {}, ["rates"] = {}, ["temps"] = {}, ["fans"] = {} }
   local cgminer = CgMiner.new(cgminer_config())
   cgminer:send("stats+fanctrl")
-  local stats = cgminer:receive()
-  if stats and stats['stats'][2] then
-    local s = stats['stats'][2]
-    dt["total"] = {
-       string.format("Now: %s Gh/s", rpad(round(s["GHS 5s"], 1), 10)),
-       string.format("Avg: %s Gh/s", rpad(round(s["GHS av"], 1), 10)),
-       string.format("Ideal: %s Gh/s", rpad(round(s["total_rateideal"], 1), 8))
-    }
-    dt["fans"] = {
-      string.format("Front: %s RPM", rpad(round(s["fan6"], 0), 9)),
-      string.format("Back: %s RPM", rpad(round(s["fan5"], 0), 10)),
-      string.format("Duty: %s %%", rpad(round(stats["fanctrl"][1]["Output"], 0), 12))
-    }
-    for chain=6,8 do
-      local rate = rpad(round(s["chain_rate" .. chain], 1), 6)
-      local temp = rpad(round(s["temp2_" .. chain], 2), 9)
-      dt["rates"][chain-5] = string.format("Chain %u: %s Gh/s", chain, rate)
-      dt["temps"][chain-5] = string.format("Chain %u: %s C", chain, temp)
-    end
-  end
+  local resp = cgminer:receive()
   cgminer:close()
-  return dt
-end
-
-local function update_screen(lcdproc, s, dt)
-  if dt[s] then
-    lcdproc:widget_set(s, "S2", "1 2 {" .. dt[s][1] .. "}")
-    lcdproc:widget_set(s, "S3", "1 3 {" .. dt[s][2] .. "}")
-    lcdproc:widget_set(s, "S4", "1 4 {" .. dt[s][3] .. "}")
+  if resp then
+    return {
+      total = screen_total(resp["stats"]),
+      fans  = screen_fans(resp["stats"], resp["fanctrl"]),
+      rates = screen_rates(resp["stats"]),
+      temps = screen_temps(resp["stats"])
+    }
   end
 end
 
-local function setup_screens(lcdproc, screens, dt)
-  for s, v in pairs(screens) do
-    lcdproc:screen_add(s)
-    lcdproc:screen_set(s, v)
-    lcdproc:widget_add(s, "S1", "title")
-    lcdproc:widget_add(s, "S2", "string")
-    lcdproc:widget_add(s, "S3", "string")
-    lcdproc:widget_add(s, "S4", "string")
-    lcdproc:widget_set(s, "S1", string.format("{%s: %s}", ucwords(s), client_name()))
-    update_screen(lcdproc, s, dt)
+local function setup_screens(lcd, screens, stats)
+  for k, v in pairs(screens) do
+    local screen = lcd:add_screen(k)
+    screen:set_duration((v.duration or 3) * 8)
+    screen:set_heartbeat(v.heartbeat or "open")
+    screen:set_backlight(v.backlight or "open")
+    screen:set_priority(v.priority or "info")
+    screen:add_title_widget("one", ucwords(k) .. ": " .. client_name())
+    screen:add_string_widget("two", 1, 2, stats[k][1])
+    screen:add_string_widget("three", 1, 3, stats[k][2])
+    screen:add_string_widget("four", 1, 4, stats[k][3])
   end
 end
 
-local lcdproc = LcdProc.new(lcdproc_config())
-lcdproc:client_set({ name = client_name() })
+local lcd = LcdProc.new(lcdproc_config())
+lcd:set_name(client_name())
 
 local stats = cgminer_stats()
-local screens = screens_config()
-setup_screens(lcdproc, screens, stats)
+setup_screens(lcd, screens_config(), stats)
 
-local active = nil
-while true do
-  local line = lcdproc:receive()
-
-  if line and line ~= "success" then
-    active = string.match(line, "listen (%a+)") or active
-    local ignore = string.match(line, "ignore (%a+)")
-    if ignore and ignore == active then
-      -- update stats on screen hide
-      stats = cgminer_stats()
-      active = nil
-    end
-
-    if active then
-      update_screen(lcdproc, active, stats)
-    end
+lcd:on_listen(function (screen)
+  if stats then
+    screen.widgets.two:set_text(stats[screen.id][1])
+    screen.widgets.three:set_text(stats[screen.id][2])
+    screen.widgets.four:set_text(stats[screen.id][3])
   end
+end)
 
-  nixio.nanosleep(0, 20000000)
+lcd:on_ignore(function () stats = cgminer_stats() end)
+
+while true do
+  lcd:poll()
 end
 
-lcdproc:close()
+lcd:close()
