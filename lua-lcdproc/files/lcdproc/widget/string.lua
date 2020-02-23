@@ -27,16 +27,14 @@ function StringWidget:update()
 end
 
 function StringWidget:set_position(x, y)
-  if self:update() then
-    self.x = x
-    self.y = y
-  end
+  self.x = x
+  self.y = y
+  return self:update()
 end
 
 function StringWidget:set_text(text)
-  if self:update() then
-    self.text = text
-  end
+  self.text = text
+  return self:update()
 end
 
 return StringWidget

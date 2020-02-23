@@ -23,9 +23,8 @@ function TitleWidget:update()
 end
 
 function TitleWidget:set_text(text)
-  if self:update() then
-    self.text = text
-  end
+  self.text = text
+  return self:update()
 end
 
 return TitleWidget

@@ -48,31 +48,27 @@ function FrameWidget:update()
 end
 
 function FrameWidget:set_position(left, top, right, bottom)
-  if self:update() then
-    self.left = left
-    self.top = top
-    self.right = right
-    self.bottom = bottom
-  end
+  self.left = left
+  self.top = top
+  self.right = right
+  self.bottom = bottom
+  return self:update()
 end
 
 function FrameWidget:set_size(width, height)
-  if self:update() then
-    self.width = width
-    self.height = height
-  end
+  self.width = width
+  self.height = height
+  return self:update()
 end
 
 function FrameWidget:set_direction(direction)
-  if self:update() then
-    self.direction = direction
-  end
+  self.direction = direction
+  return self:update()
 end
 
 function FrameWidget:set_speed(speed)
-  if self:update() then
-    self.speed = speed
-  end
+  self.speed = speed
+  return self:update()
 end
 
 return FrameWidget

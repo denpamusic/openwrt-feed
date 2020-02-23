@@ -28,62 +28,55 @@ function Screen.new(server, id)
 end
 
 function Screen:set_name(name)
-  if self.server:request(
+  self.name = name
+  return self.server:request(
     string.format("screen_set %s {%s}",
       self.id,
-      self.name)) then
-        self.name = name
-  end
+      self.name))
 end
 
 function Screen:set_size(width, height)
-  if self.server:request(string.format("screen_set %s wid %i hgt %i",
+  self.width = width
+  self.height = height
+  return self.server:request(string.format("screen_set %s wid %i hgt %i",
     self.id,
     self.width,
-    self.height)) then
-      self.width = width
-      self.height = height
-  end
+    self.height))
 end
 
 function Screen:set_priority(priority)
-  if self.server:request(string.format("screen_set %s priority %s",
+  self.priority = priority
+  return self.server:request(string.format("screen_set %s priority %s",
     self.id,
-    self.priority)) then
-      self.priority = priority
-  end
+    self.priority))
 end
 
 function Screen:set_heartbeat(heartbeat)
-  if self.server:request(string.format("screen_set %s heartbeat %s",
+  self.heartbeat = heartbeat
+  return self.server:request(string.format("screen_set %s heartbeat %s",
     self.id,
-    self.heartbeat)) then
-      self.heartbeat = heartbeat
-  end
+    self.heartbeat))
 end
 
 function Screen:set_backlight(backlight)
-  if self.server:request(string.format("screen_set %s backlight %s",
+  self.backlight = backlight
+  return self.server:request(string.format("screen_set %s backlight %s",
     self.id,
-    self.backlight)) then
-      self.backlight = backlight
-  end
+    self.backlight))
 end
 
 function Screen:set_duration(duration)
-  if self.server:request(string.format("screen_set %s duration %i",
+  self.duration = duration
+  return self.server:request(string.format("screen_set %s duration %i",
     self.id,
-    self.duration)) then
-      self.duration = duration
-  end
+    self.duration))
 end
 
 function Screen:set_timeout(timeout)
-  if self.server:request(string.format("screen_set %s timeout %i",
+  self.timeout = timeout
+  return self.server:request(string.format("screen_set %s timeout %i",
     self.id,
-    self.timeout)) then
-      self.timeout = timeout
-  end
+    self.timeout))
 end
 
 function Screen:set_cursor(cursor, x, y)
@@ -100,34 +93,42 @@ end
 
 function Screen:add_string_widget(id, x, y, text)
   self.widgets[id] = widget.string.new(self, id, x, y, text)
+  return self.widgets[id]
 end
 
 function Screen:add_title_widget(id, text)
   self.widgets[id] = widget.title.new(self, id, text)
+  return self.widgets[id]
 end
 
 function Screen:add_hbar_widget(id, x, y, length)
   self.widgets[id] = widget.hbar.new(self, id, x, y, length)
+  return self.widgets[id]
 end
 
 function Screen:add_vbar_widget(id, x, y, length)
   self.widgets[id] = widget.vbar.new(self, id, x, y, length)
+  return self.widgets[id]
 end
 
 function Screen:add_icon_widget(id, x, y, icon)
   self.widgets[id] = widget.icon.new(self, id, x, y, icon)
+  return self.widgets[id]
 end
 
 function Screen:add_scroller_widget(id, left, top, right, bottom, direction, speed, text)
   self.widgets[id] = widget.scroller.new(self, id, left, top, right, bottom, direction, speed, text)
+  return self.widgets[id]
 end
 
 function Screen:add_frame_widget(id, left, top, right, bottom, width, height, direction, speed)
   self.widgets[id] = widget.frame.new(self, id, left, top, right, bottom, width, height, direction, speed)
+  return self.widgets[id]
 end
 
 function Screen:add_number_widget(id, x, number)
   self.widgets[id] = widget.number.new(self, id, x, number)
+  return self.widgets[id]
 end
 
 function Screen:del_widget(id)

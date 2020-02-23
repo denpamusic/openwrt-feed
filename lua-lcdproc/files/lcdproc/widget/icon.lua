@@ -57,16 +57,14 @@ function IconWidget:update()
 end
 
 function IconWidget:set_position(x, y)
-  if self:update() then
-    self.x = x
-    self.y = y
-  end
+  self.x = x
+  self.y = y
+  return self:update()
 end
 
 function IconWidget:set_icon(icon)
-  if self:update() then
-    self.icon = icon
-  end
+  self.icon = icon
+  return self:update()
 end
 
 return IconWidget

@@ -45,30 +45,26 @@ function ScrollerWidget:update()
 end
 
 function ScrollerWidget:set_position(left, top, right, bottom)
-  if self:update() then
-    self.left = left
-    self.top = top
-    self.right = right
-    self.bottom = bottom
-  end
+  self.left = left
+  self.top = top
+  self.right = right
+  self.bottom = bottom
+  return self:update()
 end
 
 function ScrollerWidget:set_direction(direction)
-  if self:update() then
-    self.direction = direction
-  end
+  self.direction = direction
+  return self:update()
 end
 
 function ScrollerWidget:set_speed(speed)
-  if self:update() then
-    self.speed = speed
-  end
+  self.speed = speed
+  return self:update()
 end
 
 function ScrollerWidget:set_text()
-  if self:update() then
-    self.text = text
-  end
+  self.text = text
+  return self:update()
 end
 
 return ScrollerWidget

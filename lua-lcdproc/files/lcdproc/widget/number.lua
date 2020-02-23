@@ -30,15 +30,13 @@ function NumberWidget:update()
 end
 
 function NumberWidget:set_position(x)
-  if self:update() then
-    self.x = x
-  end
+  self.x = x
+  return self:update()
 end
 
 function NumberWidget:set_number(number)
-  if self:update() then
-    self.number = number
-  end
+  self.number = number
+  return self:update()
 end
 
 return NumberWidget

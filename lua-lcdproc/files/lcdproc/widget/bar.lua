@@ -16,16 +16,14 @@ function BarWidget:update()
 end
 
 function BarWidget:set_position(x, y)
-  if self:update() then
-    self.x = x
-    self.y = y
-  end
+  self.x = x
+  self.y = y
+  return self:update()
 end
 
 function BarWidget:set_length(length)
-  if self:update() then
-    self.length = length
-  end
+  self.length = length
+  return self:update()
 end
 
 return BarWidget
