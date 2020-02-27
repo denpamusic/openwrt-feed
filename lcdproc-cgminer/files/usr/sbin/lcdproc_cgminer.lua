@@ -102,10 +102,10 @@ local function setup_screens(lcd, screens, stats)
     screen:set_heartbeat(v.heartbeat or "open")
     screen:set_backlight(v.backlight or "open")
     screen:set_priority(v.priority or "info")
-    screen:add_title_widget("title", ucwords(k) .. ": " .. client_name())
-    screen:add_string_widget("one", 1, 2, stats[k][1])
-    screen:add_string_widget("two", 1, 3, stats[k][2])
-    screen:add_string_widget("three", 1, 4, stats[k][3])
+    screen:add_title("title", ucwords(k) .. ": " .. client_name())
+    screen:add_string("one", 1, 2, stats[k][1])
+    screen:add_string("two", 1, 3, stats[k][2])
+    screen:add_string("three", 1, 4, stats[k][3])
   end
 end
 
