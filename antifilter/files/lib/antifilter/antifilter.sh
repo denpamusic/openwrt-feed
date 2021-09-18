@@ -6,6 +6,7 @@ UCLIENT="uclient-fetch -qT 5 -O -"
 IPSET="ipset -!"
 IPSETQ="ipset -! -q"
 IPV4_PATTERN="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+LOADED=
 
 log() {
 	local level="$1"
@@ -15,15 +16,6 @@ log() {
 	logger -t "antifilter[$$]" -p "daemon.$1" "$2"
 }
 
-get_ipsets() {
-    local ipsets
-
-    ipsets=$(uci show antifilter | grep ipset | cut -f2 -d'.' | cut -f1 -d'=')
-	for ipset in $ipsets; do
-		echo "$(uci get antifilter."$ipset".prefix)_$ipset"
-	done
-}
-
 count_ipset_entries() {
 	$IPSETQ -t list "$1" | tail -1 | cut -f2 -d':' | xargs
 }
@@ -31,7 +23,7 @@ count_ipset_entries() {
 get_ipset_diff_message() {
 	local before="$1"
 	local after="$2"
-	
+
 	[ -z "$before" ] && before=0
 	[ -z "$after" ] && after=0
 
@@ -91,6 +83,26 @@ load_ipset() {
 
 handle_ipset() {
 	local config="$1"
+	local prefix enabled
+
+	config_get_bool enabled "$config" "enabled" 0
+	[ "$enabled" -eq 0 ] && return
+
+	config_get prefix "$config" prefix
+	LOADED="$LOADED ${prefix}_${config}"
+}
+
+get_ipsets() {
+	[ -z "$LOADED" ] && {
+		config_load antifilter
+		config_foreach handle_ipset ipset
+	}
+
+	echo "$LOADED"
+}
+
+handle_source() {
+	local config="$1"
 	local file sources enabled
 
 	config_get_bool enabled "$config" "enabled" 0
@@ -108,7 +120,7 @@ handle_ipset() {
 
 antifilter_update() {
 	config_load antifilter
-	config_foreach handle_ipset ipset
+	config_foreach handle_source ipset
 }
 
 antifilter_remove() {
@@ -163,7 +175,7 @@ antifilter_lookup() {
 	[ "$found" -gt 0 ] && {
 		echo "$hostname" is LISTED in "$found" blocklists.
 	} || echo "$hostname" is NOT LISTED in any blocklists.
-	
+
 	return "$found"
 }
 
