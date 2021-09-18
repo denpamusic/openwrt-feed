@@ -66,4 +66,4 @@ jobs:
         build_dir: public
         commit_message: Deploy repository
       env:
-        GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+        GH_PAT: ${{ secrets.GITHUB_PAT }}
