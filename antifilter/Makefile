@@ -8,8 +8,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=antifilter
-PKG_VERSION:=1.0.0
-PKG_RELEASE:=4
+PKG_VERSION:=1.0.1
+PKG_RELEASE:=1
 
 PKG_MAINTAINER:=Denis Paavilainen <denpa@denpa.pro>
 PKG_LICENSE:=MIT
