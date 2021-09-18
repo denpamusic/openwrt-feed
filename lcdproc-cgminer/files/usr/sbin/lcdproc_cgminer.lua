@@ -2,7 +2,7 @@
 
 local uci = require "uci"
 local CgMiner = require "cgminer"
-local LcdProc = require "lcdproc"
+local LCDproc = require "lcdproc"
 
 local curs = uci.cursor()
 
@@ -109,24 +109,25 @@ local function setup_screens(lcd, screens, stats)
   end
 end
 
-local lcd = LcdProc.new(lcdproc_config())
-lcd:set_name(client_name())
-
 local stats = cgminer_stats()
+local lcd = LCDproc(lcdproc_config())
+lcd:set_name(client_name())
 setup_screens(lcd, screens_config(), stats)
 
-lcd:on_listen(function (screen)
-  if stats then
-    screen.widgets.one:set_text(stats[screen.id][1])
-    screen.widgets.two:set_text(stats[screen.id][2])
-    screen.widgets.three:set_text(stats[screen.id][3])
-  end
-end)
-
-lcd:on_ignore(function () stats = cgminer_stats() end)
+local listen = nil
+lcd:on_listen(function (s) listen = s end)
+lcd:on_ignore(function () listen = nil end)
 
 while true do
   lcd:poll()
+
+  LCDproc.every("5s", function () stats = cgminer_stats() end)
+
+  if listen then
+    listen.widgets.one:set_text(stats[listen.id][1])
+    listen.widgets.two:set_text(stats[listen.id][2])
+    listen.widgets.three:set_text(stats[listen.id][3])
+  end
 end
 
 lcd:close()
