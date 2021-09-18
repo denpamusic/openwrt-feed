@@ -158,25 +158,28 @@ antifilter_dump() {
 antifilter_lookup() {
 	local needle="$*"
 	local resolved=0
+	local matches=0
 	local found=0
 	local hostname
 
 	echo "$needle" | grep -Eqv "^($IPV4_PATTERN ?){0,}$" && {
 		hostname="$1"
 		needle=$(resolve_hostname "$hostname") && resolved=1
-	}
+	} || hostname="$needle"
 
 	for ipset in $(get_ipsets); do
+		found=0
 		for ip in $needle; do
-			$IPSET test "$ipset" "$ip" && found=$(( found + 1 ))
+			$IPSET test "$ipset" "$ip" && found=1
 		done
+		[ "$found" -eq 1 ] && matches=$(( matches + 1 ))
 	done
 
-	[ "$found" -gt 0 ] && {
-		echo "$hostname" is LISTED in "$found" blocklists.
+	[ "$matches" -gt 0 ] && {
+		echo "$hostname" is LISTED in "$matches" blocklists.
 	} || echo "$hostname" is NOT LISTED in any blocklists.
 
-	return "$found"
+	return "$matches"
 }
 
 antifilter_daemon() {
