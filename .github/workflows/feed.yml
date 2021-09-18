@@ -60,7 +60,7 @@ jobs:
         echo "openwrt.denpa.pro" > ./public/CNAME
     - name: Deploy repository
       if: success()
-      uses: crazy-max/ghaction-github-pages@v1
+      uses: crazy-max/ghaction-github-pages@v2
       with:
         target_branch: gh-pages
         build_dir: public
