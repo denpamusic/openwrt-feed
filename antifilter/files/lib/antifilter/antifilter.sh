@@ -38,9 +38,9 @@ get_ipset_diff_message() {
 	diff=$(( $before - $after ))
 
 	if [ "$diff" -lt 0 ]; then
-		echo removed "${diff#-}" entries
+		echo added "${diff#-}" entries
 	elif [ "$diff" -gt 0 ]; then
-		echo added "$diff" entries
+		echo removed "$diff" entries
 	else
 		echo same entries count
 	fi
