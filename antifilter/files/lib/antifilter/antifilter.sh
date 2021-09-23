@@ -73,7 +73,7 @@ load_ipset() {
 
 	name=$(get_ipset_name "$config")
 	ipset=$(create_ipset "$name" "$type")
-	echo "$ipset" | grep -q "add " || return 1
+	echo "$ipset" | grep -qE "$IPV4_PATTERN" || return 1
 
 	before=$(count_ipset_entries "$name")
 
