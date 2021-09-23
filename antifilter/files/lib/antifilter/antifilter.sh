@@ -67,7 +67,7 @@ create_ipset() {
 
 load_ipset() {
 	local config="$1"
-	local ipset type before after
+	local ipset name type before after
 
 	config_get type "$config" type "hash:net"
 
