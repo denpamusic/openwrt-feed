@@ -94,7 +94,9 @@ handle_ipset() {
 	local prefix enabled
 
 	config_get_bool enabled "$config" enabled 0
-	[ $enabled -eq 1 ] && LOADED="$LOADED $(get_ipset_name "$config")"
+	[ $enabled -eq 0 ] && return
+
+	LOADED="$LOADED $(get_ipset_name "$config")"
 }
 
 get_ipsets() {
@@ -164,9 +166,11 @@ antifilter_lookup() {
 	local matches=0
 	local ip ipsets
 
-	[ -z $ips ] && return 1
+	[ -z "$ips" ] && return 1
 
 	for ip in $ips; do
+
+		ipsets=
 
 		echo "$ip" | grep -Eqv "$IPV4_PATTERN" && {
 			echo "Checking for $ip:"
