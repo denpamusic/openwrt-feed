@@ -24,6 +24,11 @@ log() {
 	logger -t "antifilter[$$]" -p "daemon.$1" "$2"
 }
 
+if_ip4_address() {
+	local case="$1"
+	echo "$case" | grep -Eq "$IPV4_PATTERN"
+}
+
 count_ipset_entries() {
 	local count=$($IPSETQ -t list "$1" | tail -1 | cut -f2 -d":" | xargs)
 	[ -z $count ] && count=0
@@ -75,7 +80,10 @@ load_ipset() {
 
 	name=$(get_ipset_name "$config")
 	ipset=$(create_ipset "$name" "$type")
-	echo "$ipset" | grep -qE "$IPV4_PATTERN" || return 1
+	echo "$ipset" | grep -qE "$IPV4_PATTERN" || {
+		log error "Could not create ipset or ipset is empty [ipset: $config]"
+		return 1
+	}
 
 	before=$(count_ipset_entries "$name")
 
@@ -121,15 +129,21 @@ handle_source_file() {
 		$UCLIENT "$source/$file" | load_ipset "$config" && return
 	done
 
-	log error "No alive sources for $file"
+	log error "No alive sources for $file [ipset: $config]"
 	return 1
 }
 
 handle_source_entries() {
 	local config="$1"
 	local entries="$2"
+	local entry ipset
 
-	echo "$entries" | tr " " "\n" | load_ipset "$config"
+	for entry in $entries; do
+		if_ip4_address "$entry" || entry=$(resolve_hostname "$entry")
+		[ ! -z "$entry" ] && ipset="$ipset $entry"
+	done
+
+	echo "$ipset" | tr " " "\n" | sed '/^$/d' | load_ipset "$config"
 }
 
 handle_source() {
@@ -142,10 +156,17 @@ handle_source() {
 	config_get file "$config" file
 	config_get entries "$config" entry
 
-	[ ! -z "$file" ] && handle_source_file "$config" "$file" && return $?
-	[ ! -z "$entries" ] && handle_source_entries "$config" "$entries" && return $?
+	[ ! -z "$file" ] && {
+		handle_source_file "$config" "$file"
+		return $?
+	}
 
-	log error "No source file or entries defined for $config"
+	[ ! -z "$entries" ] && {
+		handle_source_entries "$config" "$entries"
+		return $?
+	}
+
+	log error "No source file or entries defined [ipset: $config]"
 	return 1
 }
 
@@ -196,7 +217,7 @@ antifilter_lookup() {
 
 		ipsets=
 
-		echo "$ip" | grep -Eqv "$IPV4_PATTERN" && {
+		if_ip4_address "$ip" || {
 			echo "Checking for $ip:"
 			antifilter_lookup $(resolve_hostname "$ip") || echo "error: $ip not found"
 			continue
