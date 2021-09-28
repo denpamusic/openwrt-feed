@@ -25,7 +25,9 @@ log() {
 }
 
 count_ipset_entries() {
-	$IPSETQ -t list "$1" | tail -1 | cut -f2 -d":" | xargs
+	local count=$($IPSETQ -t list "$1" | tail -1 | cut -f2 -d":" | xargs)
+	[ -z $count ] && count=0
+	echo $count
 }
 
 get_ipset_diff_message() {
@@ -108,14 +110,11 @@ get_ipsets() {
 	echo "$LOADED"
 }
 
-handle_source() {
+handle_source_file() {
 	local config="$1"
-	local file source sources enabled
+	local file="$2"
+	local source sources
 
-	config_get_bool enabled "$config" enabled 0
-	[ $enabled -eq 0 ] && return
-
-	config_get file "$config" file
 	config_get sources "antifilter" source
 
 	for source in $sources; do
@@ -123,6 +122,31 @@ handle_source() {
 	done
 
 	log error "No alive sources for $file"
+	return 1
+}
+
+handle_source_entries() {
+	local config="$1"
+	local entries="$2"
+
+	echo "$entries" | tr " " "\n" | load_ipset "$config"
+}
+
+handle_source() {
+	local config="$1"
+	local file entries enabled
+
+	config_get_bool enabled "$config" enabled 0
+	[ $enabled -eq 0 ] && return
+
+	config_get file "$config" file
+	config_get entries "$config" entry
+
+	[ ! -z "$file" ] && handle_source_file "$config" "$file" && return $?
+	[ ! -z "$entries" ] && handle_source_entries "$config" "$entries" && return $?
+
+	log error "No source file or entries defined for $config"
+	return 1
 }
 
 antifilter_update() {
