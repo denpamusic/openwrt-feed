@@ -6,16 +6,16 @@ help() {
 	cat <<EOF
 Syntax: antifilter [command]
 Available commands:
-	start                        Start antifilter daemon and load ipsets
+	start                        Start antifilter daemon
 	stop                         Stop antifilter daemon
 	restart                      Restart antifilter daemon
 	add <ipset> <host or ip>     Add new entries to the ipset
 	delete <ipset> <host or ip>  Remove entries from the ipset
-	drop                         Remove all ipsets
-	update <ipset>               Update single or all ipsets
 	lookup <host or ip>          Lookup entry in loaded ipsets
+	update <ipset>               Update single or all ipsets
+	unload <ipset>               Unload single or all ipsets
+	dump <ipset>                 Dump single or all ipsets
 	status                       List loaded ipsets
-	dump                         Dump loaded ipsets
 EOF
 }
 
@@ -31,21 +31,16 @@ restart() {
 	/etc/init.d/antifilter restart
 }
 
-status() {
-	antifilter_status
-}
-
 add() {
 	antifilter_add "$@"
 }
 
-remove() {
-	antifilter_remove "$@"
+delete() {
+	antifilter_delete "$@"
 }
 
-drop() {
-	stop
-	antifilter_drop
+lookup() {
+	antifilter_lookup "$@"
 }
 
 update() {
@@ -54,16 +49,20 @@ update() {
 	antifilter_status_ipsets
 }
 
-lookup() {
-	antifilter_lookup "$@"
+unload() {
+	antifilter_unload "$@"
 }
 
 dump() {
-	antifilter_dump
+	antifilter_dump "$@"
+}
+
+status() {
+	antifilter_status
 }
 
 case "$1" in
-	start|stop|restart|run|remove|update|lookup|status|dump|add|remove)
+	start|stop|restart|add|delete|lookup|update|unload|dump|status)
 		"$@"
 	;;
 	--daemon)

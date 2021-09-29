@@ -13,8 +13,14 @@ log() {
 	local message="$2"
 
 	case $level in
-		warning | error | debug)
-			>&2 echo "$message"
+		warning)
+			warning "$message"
+			;;
+		error)
+			error "$message"
+			;;
+		debug)
+			debug "$message"
 			;;
 		*)
 			echo "$message"
@@ -22,6 +28,25 @@ log() {
 	esac
 
 	logger -t "antifilter[$$]" -p "daemon.$1" "$2"
+}
+
+warning() {
+	local message="$1"
+
+	>&2 echo "warn: $message"
+}
+
+error() {
+	local message="$1"
+
+	>&2 echo "error: $message"
+	return 1
+}
+
+debug() {
+	local message="$1"
+
+	>&2 echo "debug: $message"
 }
 
 has_ip4_address() {
@@ -60,11 +85,22 @@ get_ipset_diff_message() {
 }
 
 get_ipset_name() {
-	local config="$1"
 	local prefix
 
-	config_get prefix "$config" prefix
+	config_get prefix "antifilter" prefix "antifilter"
 	echo "${prefix}_${config}"
+}
+
+get_ipset_name_if_exists() {
+	local config="$1"
+	local name
+
+	config_load antifilter
+	name=$(get_ipset_name "$config")
+
+	if_ipset_exists "$name" || return 1
+
+	echo "$name"
 }
 
 resolve_hostname() {
@@ -105,7 +141,7 @@ add_ipset_entries() {
 	local entry
 
 	if_ipset_exists "$name" || {
-		log error "ipset DOES NOT exist [ipset: $name]"
+		log error "ipset does not exist [ipset: $name]"
 		return 1
 	}
 
@@ -209,13 +245,6 @@ handle_source() {
 	log info "$name: $(get_ipset_diff_message $before $after)"
 }
 
-antifilter_update() {
-	local config="$1"
-
-	config_load antifilter
-	[ -z "$config" ] && config_foreach handle_source ipset || handle_source "$config"
-}
-
 antifilter_add() {
 	local config="$1"
 	shift
@@ -235,7 +264,7 @@ antifilter_add() {
 	uci_commit antifilter && antifilter_update "$config"
 }
 
-antifilter_remove() {
+antifilter_delete() {
 	local config="$1"
 	shift
 	local entries="$*"
@@ -246,37 +275,6 @@ antifilter_remove() {
 	done
 
 	uci_commit antifilter && antifilter_update "$config"
-}
-
-antifilter_drop() {
-	local ipset
-	for ipset in $(get_ipsets); do
-		$IPSETQ destroy "$ipset"
-	done
-}
-
-antifilter_status_ipsets() {
-	local ipset
-	echo Loaded ipsets:
-	for ipset in $(get_ipsets); do
-		echo "$ipset ($(count_ipset_entries "$ipset") entries)"
-	done
-}
-
-antifilter_status() {
-	[ -f /var/run/antifilter.pid ] &&
-		echo "Update service is running with pid $(cat /var/run/antifilter.pid)" ||
-		echo "Update service is NOT running"
-	echo
-
-	antifilter_status_ipsets
-}
-
-antifilter_dump() {
-	local ipset
-	for ipset in $(get_ipsets); do
-		$IPSETQ save "$ipset"
-	done
 }
 
 antifilter_lookup() {
@@ -302,6 +300,62 @@ antifilter_lookup() {
 		[ $matches -gt 0 ] &&
 			echo "$entry is LISTED in following blocklists: ${ipsets:2}." ||
 			echo "$entry is NOT LISTED in any blocklists."
+	done
+}
+
+antifilter_update() {
+	local config="$1"
+
+	config_load antifilter
+	[ -z "$config" ] && config_foreach handle_source ipset || handle_source "$config"
+}
+
+antifilter_unload() {
+	local config="$1"
+	local ipsets ipset
+
+	[ ! -z "$config" ] && {
+		config_load antifilter
+		ipsets=$(get_ipset_name_if_exists "$config") || error "ipset does not exists"
+	}
+
+	[ -z "$config" ] && ipsets=$(get_ipsets)
+
+	for ipset in $ipsets; do
+		$IPSETQ destroy "$ipset"
+	done
+}
+
+antifilter_dump() {
+	local config="$1"
+	local ipsets ipset
+
+	[ ! -z "$config" ] && {
+		config_load antifilter
+		ipsets=$(get_ipset_name_if_exists "$config") || error "ipset does not exists"
+	}
+
+	[ -z "$config" ] && ipsets=$(get_ipsets)
+
+	for ipset in $ipsets; do
+		$IPSETQ save "$ipset"
+	done
+}
+
+antifilter_status() {
+	[ -f /var/run/antifilter.pid ] &&
+		echo "Update service is running with pid $(cat /var/run/antifilter.pid)" ||
+		echo "Update service is NOT running"
+	echo
+
+	antifilter_status_ipsets
+}
+
+antifilter_status_ipsets() {
+	local ipset
+	echo Loaded ipsets:
+	for ipset in $(get_ipsets); do
+		echo "$ipset ($(count_ipset_entries "$ipset") entries)"
 	done
 }
 
