@@ -175,7 +175,9 @@ handle_source_entries() {
 	name=$(get_ipset_name "$config")
 	ipset=$(echo ${ipset:1} | tr "" "\n")
 
-	if_ipset_exists "$name" && add_ipset_entries "$name" "$ipset" || load_ipset "$name" "$type"
+	if_ipset_exists "$name" && add_ipset_entries "$name" "$ipset" || {
+		echo -e "$ipset" | load_ipset "$name" "$type"
+	}
 
 	unset ipset
 }
