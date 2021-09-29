@@ -9,7 +9,7 @@ Available commands:
 	start                Start antifilter updater and loads ipsets
 	stop                 Stop antifilter updater
 	restart              Restart antifilter updater
-	remove               Removes antifilter ipsets
+	drop                 Removes antifilter ipsets
 	update               Update antifilter ipsets
 	lookup <host or ip>  Lookup hostname or ip in ipsets
 	status               List loaded ipsets
@@ -33,9 +33,9 @@ status() {
 	antifilter_status
 }
 
-remove() {
+drop() {
 	stop
-	antifilter_remove
+	antifilter_drop
 }
 
 update() {

@@ -213,7 +213,7 @@ antifilter_update() {
 	config_foreach handle_source ipset
 }
 
-antifilter_remove() {
+antifilter_drop() {
 	local ipset
 	for ipset in $(get_ipsets); do
 		$IPSETQ destroy "$ipset"
@@ -245,28 +245,28 @@ antifilter_dump() {
 }
 
 antifilter_lookup() {
-	local ips="$*"
+	local entries="$*"
 	local matches=0
 	local ip ipsets
 
-	[ -z "$ips" ] && return 1
+	[ -z "$entries" ] && return 1
 
-	for ip in $ips; do
+	for entry in $entries; do
 		ipsets=
 
-		has_ip4_address "$ip" || {
-			echo "Checking for $ip:"
-			antifilter_lookup $(resolve_hostname "$ip")
+		has_ip4_address "$entry" || {
+			echo "Checking for $entry:"
+			antifilter_lookup $(resolve_hostname "$entry")
 			continue
 		}
 
 		for ipset in $(get_ipsets); do
-			$IPSETQ test "$ipset" "$ip" && matches=$(( matches + 1 )) && ipsets="$ipsets, $ipset"
+			$IPSETQ test "$ipset" "$entry" && matches=$(( matches + 1 )) && ipsets="$ipsets, $ipset"
 		done
 
 		[ $matches -gt 0 ] &&
-			echo "$ip is LISTED in following blocklists: ${ipsets:2}." ||
-			echo "$ip is NOT LISTED in any blocklists."
+			echo "$entry is LISTED in following blocklists: ${ipsets:2}." ||
+			echo "$entry is NOT LISTED in any blocklists."
 	done
 }
 
