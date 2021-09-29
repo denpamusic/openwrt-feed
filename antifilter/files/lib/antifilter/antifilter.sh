@@ -165,6 +165,7 @@ handle_source_entries() {
 	local type ipset entry name
 
 	config_get type "$config" type "hash:net"
+	config_get file "$config" file
 
 	ipset=
 	for entry in $entries; do
@@ -175,7 +176,7 @@ handle_source_entries() {
 	name=$(get_ipset_name "$config")
 	ipset=$(echo ${ipset:1} | tr " " "\n")
 
-	if_ipset_exists "$name" && add_ipset_entries "$name" "$ipset" || {
+	[ ! -z "$file" ] && add_ipset_entries "$name" "$ipset" || {
 		echo -e "$ipset" | load_ipset "$name" "$type"
 	}
 
@@ -209,8 +210,42 @@ handle_source() {
 }
 
 antifilter_update() {
+	local config="$1"
+
 	config_load antifilter
-	config_foreach handle_source ipset
+	[ -z "$config" ] && config_foreach handle_source ipset || handle_source "$config"
+}
+
+antifilter_add() {
+	local config="$1"
+	shift
+	local entries="$*"
+	local enabled entry
+
+	config_load antifilter
+
+	config_get_bool enabled "$config" enabled 0
+	[ $enabled -eq 0 ] && return
+
+	for entry in $entries; do
+		uci_remove_list antifilter "$config" entry "$entry"
+		uci_add_list antifilter "$config" entry "$entry"
+	done
+
+	uci_commit antifilter && antifilter_update "$config"
+}
+
+antifilter_remove() {
+	local config="$1"
+	shift
+	local entries="$*"
+	local enabled entry
+
+	for entry in $entries; do
+		uci_remove_list antifilter "$config" entry "$entry"
+	done
+
+	uci_commit antifilter && antifilter_update "$config"
 }
 
 antifilter_drop() {
