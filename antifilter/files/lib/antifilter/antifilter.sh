@@ -173,7 +173,7 @@ handle_source_entries() {
 	done
 
 	name=$(get_ipset_name "$config")
-	ipset=$(echo ${ipset:1} | tr "" "\n")
+	ipset=$(echo ${ipset:1} | tr " " "\n")
 
 	if_ipset_exists "$name" && add_ipset_entries "$name" "$ipset" || {
 		echo -e "$ipset" | load_ipset "$name" "$type"
@@ -192,14 +192,14 @@ handle_source() {
 	config_get file "$config" file
 	config_get entries "$config" entry
 
-	log info "Loading $config..."
+	name=$(get_ipset_name "$config")
+	log info "Loading $name..."
 
 	[ -z "$file" ] && [ -z "$entries" ] && {
 		log error "No source file or entries defined [ipset: $config]"
 		return 1
 	}
 
-	name=$(get_ipset_name "$config")
 	before=$(count_ipset_entries "$name")
 	[ ! -z "$file" ]    && handle_source_file    "$config" "$file"
 	[ ! -z "$entries" ] && handle_source_entries "$config" "$entries"
@@ -247,7 +247,7 @@ antifilter_dump() {
 antifilter_lookup() {
 	local entries="$*"
 	local matches=0
-	local ip ipsets
+	local entry ipsets
 
 	[ -z "$entries" ] && return 1
 
