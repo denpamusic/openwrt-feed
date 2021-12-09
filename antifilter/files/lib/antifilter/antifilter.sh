@@ -6,50 +6,57 @@ UCLIENT="uclient-fetch -qT 5 -O -"
 IPSET="ipset -!"
 IPSETQ="ipset -! -q"
 IPV4_PATTERN="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+PIDFILE=/var/run/antifilter.pid
+DAEMON=0
 LOADED=
+
+__true() {
+	return 0
+}
+
+__false() {
+	return 1
+}
+
+__ipsets() {
+	if_empty "$LOADED" && config_foreach handle_loaded ipset
+
+	echo "$LOADED"
+}
 
 log() {
 	local level="$1"
 	local message="$2"
 
-	case $level in
-		warning)
-			warning "$message"
+	if_empty "$message" && message="$level" && level="info"
+
+	case "$level" in
+		warning|info|notice|debug)
+			if_daemon &&
+				logger -t "antifilter[$$]" -p "daemon.$level" "$message" ||
+				echo "$message"
+
+			return $(__true)
 			;;
 		error)
-			error "$message"
-			;;
-		debug)
-			debug "$message"
-			;;
-		*)
-			echo "$message"
+			if_daemon &&
+				logger -t "antifilter[$$]" -p "daemon.error" "$message" ||
+				>&2 echo "error: $message"
+
+			return $(__false)
 			;;
 	esac
-
-	logger -t "antifilter[$$]" -p "daemon.$1" "$2"
-}
-
-warning() {
-	local message="$1"
-
-	>&2 echo "warn: $message"
 }
 
 error() {
-	local message="$1"
-
-	>&2 echo "error: $message"
-	return 1
+	log error "$1"
 }
 
-debug() {
-	local message="$1"
-
-	>&2 echo "debug: $message"
+if_daemon() {
+	[ "$DAEMON" -eq 1 ]
 }
 
-has_ip4_address() {
+if_has_ip4_address() {
 	local case="$1"
 
 	echo "$case" | grep -Eq "$IPV4_PATTERN"
@@ -61,21 +68,49 @@ if_ipset_exists() {
 	$IPSETQ list "$name" >/dev/null 2>&1
 }
 
-count_ipset_entries() {
-	local count
+if_file_older_than() {
+	local file="$1"
+	local age="$2"
+	local mtime
 
-	count=$($IPSETQ -t list "$1" | tail -1 | cut -f2 -d":" | xargs)
-	[ -z $count ] && count=0
+	[ ! -f "$file" ] && return $(__true)
 
-	echo $count
+	mtime=$(date -r "$file" "+%s")
+	now=$(date "+%s")
+
+	[ $(( (now - mtime) / 60 )) -ge $age ]
+}
+
+if_empty() {
+	local vars="$*"
+	local var result
+
+	for var in $vars; do
+		[ -z "$var" ] && return $(false)
+	done
+}
+
+if_enabled() {
+	local config="$1"
+	local enabled
+
+	config_get_bool enabled "$config" enabled 0
+	[ $enabled -eq 1 ]
+}
+
+handle_loaded() {
+	local config="$1"
+
+	if_enabled "$config" && if_ipset_exists "$config" && LOADED="$LOADED $config"
 }
 
 get_ipset_diff_message() {
 	local before="$1"
 	local after="$2"
+	local diff
 
-	[ -z $before ] && before=0
-	[ -z $after  ] && after=0
+	if_empty "$before" && before=0
+	if_empty "$after" && after=0
 
 	diff=$(( before - after ))
 
@@ -84,70 +119,20 @@ get_ipset_diff_message() {
 	[ $diff -eq 0 ] && echo same entries count
 }
 
-get_ipset_name() {
-	local prefix
+count_ipset_entries() {
+	local ipset="$1"
+	local count=0
 
-	config_get prefix "antifilter" prefix "antifilter"
-	echo "${prefix}_${config}"
-}
-
-get_ipset_name_if_exists() {
-	local config="$1"
-	local name
-
-	config_load antifilter
-	name=$(get_ipset_name "$config")
-
-	if_ipset_exists "$name" || return 1
-
-	echo "$name"
+	if_ipset_exists "$ipset" && count=$($IPSETQ -t list "$ipset" | tail -1 | cut -f2 -d":" | xargs)
+	echo $count
 }
 
 resolve_hostname() {
 	local hostname="$1"
-	local ips
+	local ips=$(/usr/bin/nslookup "$hostname" 2>/dev/null | grep -E "Address [0-9]+: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
 
-	ips=$(nslookup "$hostname" 2>/dev/null | grep -E "Address [0-9]+: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
-	[ -z "$ips" ] && {
-		log error "$hostname not found"
-		return 1
-	}
-
+	if_empty "$ips" && return $(error "$hostname not found")
 	echo "$ips"
-}
-
-handle_ipset() {
-	local config="$1"
-	local enabled
-
-	config_get_bool enabled "$config" enabled 0
-	[ $enabled -eq 0 ] && return
-
-	LOADED="$LOADED $(get_ipset_name "$config")"
-}
-
-get_ipsets() {
-	[ -z "$LOADED" ] && {
-		config_load antifilter
-		config_foreach handle_ipset ipset
-	}
-
-	echo "$LOADED"
-}
-
-add_ipset_entries() {
-	local name="$1"
-	local entries="$2"
-	local entry
-
-	if_ipset_exists "$name" || {
-		log error "ipset does not exist [ipset: $name]"
-		return 1
-	}
-
-	for entry in $entries; do
-		$IPSETQ add "$name" "$entry"
-	done
 }
 
 create_ipset() {
@@ -161,14 +146,10 @@ create_ipset() {
 load_ipset() {
 	local name="$1"
 	local type="$2"
-	local ipset
+	local items="$3"
+	local ipset="$(echo -e "$items" | create_ipset "$name" "$type")"
 
-	ipset=$(create_ipset "$name" "$type")
-
-	has_ip4_address "$ipset" || {
-		log error "Could not create ipset or ipset is empty [ipset: $name]"
-		return 1
-	}
+	if_has_ip4_address "$ipset" || return $(error "Could not create ipset or ipset is empty [ipset: $name]")
 
 	echo "$ipset" | $IPSETQ restore
 	$IPSETQ create "$name" "$type"
@@ -177,84 +158,105 @@ load_ipset() {
 	unset ipset
 }
 
-handle_source_file() {
-	local config="$1"
-	local file="$2"
-	local sources type name source
+append_entries() {
+	local name="$1"
+	local entries="$2"
+	local entry
 
-	config_get sources "antifilter" source
-	config_get type "$config" type "hash:net"
+	if_ipset_exists "$name" || return $(error "ipset does not exist [ipset: $name]")
 
-	name=$(get_ipset_name "$config")
-
-	for source in $sources; do
-		$UCLIENT "$source/$file" | load_ipset "$name" "$type" && return
+	for entry in $entries; do
+		$IPSETQ add "$name" "$entry"
 	done
-
-	log error "No alive sources for $file [ipset: $name]"
-	return 1
 }
 
-handle_source_entries() {
-	local config="$1"
-	local entries="$2"
-	local type ipset entry name
+handle_url() {
+	local url="$1"
+	local config="$2"
+	local type="$3"
+	local ttl="$4"
+	local datadir md5sum file
 
-	config_get type "$config" type "hash:net"
-	config_get file "$config" file
+	config_get datadir "antifilter" datadir "/tmp/antifilter"
 
-	ipset=
-	for entry in $entries; do
-		has_ip4_address "$entry" || entry=$(resolve_hostname "$entry")
-		[ ! -z "$entry" ] && ipset="$ipset $entry"
-	done
+	mkdir -p "$datadir"
+	md5sum=$(echo "$url" | md5sum | cut -d" " -f1)
+	file="$datadir/$md5sum.lst.gz"
 
-	name=$(get_ipset_name "$config")
-	ipset=$(echo ${ipset:1} | tr " " "\n")
+	if_file_older_than "$file" "$ttl" && {
+		log info "Fetching ${url##*/} from remote..."
+		$UCLIENT "$url" | gzip > "$file"
+	} || log info "Loading ${url##*/} from cached copy: ${file##*/}..."
 
-	[ ! -z "$file" ] && add_ipset_entries "$name" "$ipset" || {
-		echo -e "$ipset" | load_ipset "$name" "$type"
-	}
-
-	unset ipset
+	load_ipset "$config" "$type" "$(gzip -dkc "$file")" && break
 }
 
 handle_source() {
 	local config="$1"
-	local enabled file entries name before after
+	local source="$2"
+	local type ttl
 
-	config_get_bool enabled "$config" enabled 0
-	[ $enabled -eq 0 ] && return
+	config_get type "$config" type "hash:net"
+	config_get ttl  "$source" ttl 360
+	config_list_foreach "$source" url handle_url "$config" "$type" "$ttl"
 
-	config_get file "$config" file
+	if_ipset_exists "$config" || return $(error "No alive sources for $source [ipset: $config]")
+}
+
+handle_entries() {
+	local config="$1"
+	local entries="$2"
+	local items=
+	local type entry source
+
+	config_get type "$config" type "hash:net"
+	config_get source "$config" source
+
+	for entry in $entries; do
+		log info "Resolving and adding $entry..."
+		if_has_ip4_address "$entry" || entry="$(resolve_hostname "$entry")"
+		if_empty "$entry" || items="$items $entry"
+	done
+
+	items=$(echo ${items:1} | tr " " "\n")
+
+	if_empty "$source" && load_ipset "$config" "$type" "$items" || append_entries "$config" "$items"
+
+	unset items
+}
+
+
+handle_ipset() {
+	local config="$1"
+	local source entries before after
+
+	if_enabled "$config" || return $(__true)
+
+	config_get source "$config" source
 	config_get entries "$config" entry
 
-	name=$(get_ipset_name "$config")
-	log info "Loading $name..."
+	log info "Loading $config..."
+	if_empty "$source" "$entries" && return $(error "No source or entries defined [ipset: $config]")
+	before=$(count_ipset_entries "$config")
+	if_empty "$source"  || handle_source  "$config" "$source"
+	if_empty "$entries" || handle_entries "$config" "$entries"
+	after=$(count_ipset_entries "$config")
+	log info "$config: $(get_ipset_diff_message $before $after)"
+}
 
-	[ -z "$file" ] && [ -z "$entries" ] && {
-		log error "No source file or entries defined [ipset: $config]"
-		return 1
-	}
+antifilter_update() {
+	local config="$1"
 
-	before=$(count_ipset_entries "$name")
-	[ ! -z "$file" ]    && handle_source_file    "$config" "$file"
-	[ ! -z "$entries" ] && handle_source_entries "$config" "$entries"
-	after=$(count_ipset_entries "$name")
-
-	log info "$name: $(get_ipset_diff_message $before $after)"
+	if_empty "$config" && config_foreach handle_ipset ipset || handle_ipset "$config"
 }
 
 antifilter_add() {
 	local config="$1"
 	shift
 	local entries="$*"
-	local enabled entry
+	local entry
 
-	config_load antifilter
-
-	config_get_bool enabled "$config" enabled 0
-	[ $enabled -eq 0 ] && return
+	if_enabled "$config" || return $(__true)
 
 	for entry in $entries; do
 		uci_remove_list antifilter "$config" entry "$entry"
@@ -268,7 +270,7 @@ antifilter_delete() {
 	local config="$1"
 	shift
 	local entries="$*"
-	local enabled entry
+	local entry
 
 	for entry in $entries; do
 		uci_remove_list antifilter "$config" entry "$entry"
@@ -280,94 +282,80 @@ antifilter_delete() {
 antifilter_lookup() {
 	local entries="$*"
 	local matches=0
-	local entry ipsets
+	local ipsets entry
 
-	[ -z "$entries" ] && return 1
+	if_empty "$entries" && return $(error "no hosts or ips to check")
 
 	for entry in $entries; do
+
 		ipsets=
 
-		has_ip4_address "$entry" || {
+		if_has_ip4_address "$entry" || {
 			echo "Checking for $entry:"
-			antifilter_lookup $(resolve_hostname "$entry")
+			antifilter_lookup "$(resolve_hostname "$entry")"
 			continue
 		}
 
-		for ipset in $(get_ipsets); do
+		for ipset in $(__ipsets); do
 			$IPSETQ test "$ipset" "$entry" && matches=$(( matches + 1 )) && ipsets="$ipsets, $ipset"
 		done
 
 		[ $matches -gt 0 ] &&
-			echo "$entry is LISTED in following blocklists: ${ipsets:2}." ||
-			echo "$entry is NOT LISTED in any blocklists."
+			echo "$entry is listed in following blocklists: ${ipsets:2}." ||
+			echo "$entry is not listed in any blocklists."
+
 	done
-}
-
-antifilter_update() {
-	local config="$1"
-
-	config_load antifilter
-	[ -z "$config" ] && config_foreach handle_source ipset || handle_source "$config"
 }
 
 antifilter_unload() {
 	local config="$1"
-	local ipsets ipset
+	local ipsets="$(__ipsets)"
+	local ipset
 
-	[ ! -z "$config" ] && {
-		config_load antifilter
-		ipsets=$(get_ipset_name_if_exists "$config") || error "ipset does not exists"
+	if_empty "$config" || {
+		if_ipset_exists "$config" || return $(error "ipset $config does not exists")
+		ipsets="$config"
 	}
 
-	[ -z "$config" ] && ipsets=$(get_ipsets)
-
-	for ipset in $ipsets; do
-		$IPSETQ destroy "$ipset"
-	done
+	for ipset in $ipsets; do $IPSETQ destroy "$ipset"; done
 }
 
 antifilter_dump() {
 	local config="$1"
-	local ipsets ipset
+	local ipsets="$(__ipsets)"
+	local ipset
 
-	[ ! -z "$config" ] && {
-		config_load antifilter
-		ipsets=$(get_ipset_name_if_exists "$config") || error "ipset does not exists"
+	if_empty "$config" || {
+		if_ipset_exists "$config" || return $(error "ipset $config does not exists")
+		ipsets="$config"
 	}
 
-	[ -z "$config" ] && ipsets=$(get_ipsets)
-
-	for ipset in $ipsets; do
-		$IPSETQ save "$ipset"
-	done
+	for ipset in $ipsets; do $IPSETQ save "$ipset"; done
 }
 
 antifilter_status() {
-	[ -f /var/run/antifilter.pid ] &&
-		echo "Update service is running with pid $(cat /var/run/antifilter.pid)" ||
-		echo "Update service is NOT running"
+	[ -f $PIDFILE ] &&
+		echo "Update service is running with pid $(cat $PIDFILE)" ||
+		echo "Update service is not running"
 	echo
 
-	antifilter_status_ipsets
-}
-
-antifilter_status_ipsets() {
-	local ipset
 	echo Loaded ipsets:
-	for ipset in $(get_ipsets); do
-		echo "$ipset ($(count_ipset_entries "$ipset") entries)"
-	done
+	for ipset in $(__ipsets); do echo "$ipset ($(count_ipset_entries "$ipset") entries)"; done
 }
 
 antifilter_daemon() {
 	local minutes
 
-	config_load antifilter
+	DAEMON=1
+
 	config_get minutes antifilter interval 360
 
-	log notice "Using update interval of $minutes minutes..."
+	log info "Using update interval of $minutes minutes..."
+
 	while true; do
 		antifilter_update || exit $?
 		sleep $(( minutes * 60 ))
 	done
 }
+
+config_load antifilter

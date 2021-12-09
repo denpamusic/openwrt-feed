@@ -45,8 +45,6 @@ lookup() {
 
 update() {
 	antifilter_update "$@"
-	echo
-	antifilter_status_ipsets
 }
 
 unload() {
