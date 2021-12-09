@@ -263,7 +263,7 @@ antifilter_add() {
 		uci_add_list antifilter "$config" entry "$entry"
 	done
 
-	uci_commit antifilter && antifilter_update "$config"
+	uci_commit antifilter && config_load antifilter && antifilter_update "$config"
 }
 
 antifilter_delete() {
@@ -276,7 +276,7 @@ antifilter_delete() {
 		uci_remove_list antifilter "$config" entry "$entry"
 	done
 
-	uci_commit antifilter && antifilter_update "$config"
+	uci_commit antifilter && config_load antifilter && antifilter_update "$config"
 }
 
 antifilter_lookup() {
