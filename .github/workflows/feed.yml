@@ -17,6 +17,7 @@ jobs:
       run: |
         git clone https://github.com/openwrt/openwrt.git
         cd openwrt
+        git checkout tags/v21.02.1
         cp feeds.conf.default feeds.conf
         echo src-git denpamusic https://github.com/denpamusic/openwrt-feed.git >> feeds.conf
         ./scripts/feeds update -a
