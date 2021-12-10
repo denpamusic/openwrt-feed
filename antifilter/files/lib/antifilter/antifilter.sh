@@ -5,6 +5,7 @@
 UCLIENT="uclient-fetch -qT 5 -O -"
 IPSET="ipset -!"
 IPSETQ="ipset -! -q"
+NSLOOKUP=/usr/bin/nslookup
 IPV4_PATTERN="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
 PIDFILE=/var/run/antifilter.pid
 DAEMON=0
@@ -34,14 +35,14 @@ log() {
 		warning|info|notice|debug)
 			if_daemon &&
 				logger -t "antifilter[$$]" -p "daemon.$level" "$message" ||
-				echo "$message"
+				echo -e "$message"
 
 			return $(__true)
 			;;
 		error)
 			if_daemon &&
 				logger -t "antifilter[$$]" -p "daemon.error" "$message" ||
-				>&2 echo "error: $message"
+				>&2 echo -e "error: $message"
 
 			return $(__false)
 			;;
@@ -114,9 +115,9 @@ get_ipset_diff_message() {
 
 	diff=$(( before - after ))
 
-	[ $diff -lt 0 ] && echo added ${diff#-} entries
-	[ $diff -gt 0 ] && echo removed $diff entries
-	[ $diff -eq 0 ] && echo same entries count
+	[ $diff -lt 0 ] && echo "($before -> $after, +${diff#-} entries)"
+	[ $diff -gt 0 ] && echo "($before -> $after, -${diff} entries)"
+	[ $diff -eq 0 ] && echo "($after entries)"
 }
 
 count_ipset_entries() {
@@ -129,7 +130,7 @@ count_ipset_entries() {
 
 resolve_hostname() {
 	local hostname="$1"
-	local ips=$(/usr/bin/nslookup "$hostname" 2>/dev/null | grep -E "Address [0-9]+: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
+	local ips=$($NSLOOKUP "$hostname" 2>/dev/null | grep -E "Address [0-9]+: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
 
 	if_empty "$ips" && return $(error "$hostname not found")
 	echo "$ips"
@@ -149,7 +150,7 @@ load_ipset() {
 	local items="$3"
 	local ipset="$(echo -e "$items" | create_ipset "$name" "$type")"
 
-	if_has_ip4_address "$ipset" || return $(error "Could not create ipset or ipset is empty [ipset: $name]")
+	if_has_ip4_address "$ipset" || return $(error "${PALETTE_BOLD}${name}:${PALETTE_RESET} could not create ipset or ipset is empty")
 
 	echo "$ipset" | $IPSETQ restore
 	$IPSETQ create "$name" "$type"
@@ -163,7 +164,7 @@ append_entries() {
 	local entries="$2"
 	local entry
 
-	if_ipset_exists "$name" || return $(error "ipset does not exist [ipset: $name]")
+	if_ipset_exists "$name" || return $(error "${PALETTE_BOLD}${name}:${PALETTE_RESET} ipset does not exist")
 
 	for entry in $entries; do
 		$IPSETQ add "$name" "$entry"
@@ -173,8 +174,9 @@ append_entries() {
 handle_url() {
 	local url="$1"
 	local config="$2"
-	local type="$3"
-	local ttl="$4"
+	local source="$3"
+	local type="$4"
+	local ttl="$5"
 	local datadir md5sum file
 
 	config_get datadir "antifilter" datadir "/tmp/antifilter"
@@ -184,11 +186,11 @@ handle_url() {
 	file="$datadir/$md5sum.lst.gz"
 
 	if_file_older_than "$file" "$ttl" && {
-		log info "Fetching ${url##*/} from remote..."
+		log info "${PALETTE_BOLD}${config}:${PALETTE_RESET} fetching ${PALETTE_GREEN}${source}${PALETTE_RESET} from ${PALETTE_GREEN}${url}${PALETTE_RESET}..."
 		$UCLIENT "$url" | gzip > "$file"
-	} || log info "Loading ${url##*/} from cached copy: ${file##*/}..."
+	} || log info "${PALETTE_BOLD}${config}:${PALETTE_RESET} loading ${PALETTE_GREEN}${source}${PALETTE_RESET} from cached copy ${PALETTE_GREEN}${file##*/}${PALETTE_RESET}..."
 
-	load_ipset "$config" "$type" "$(gzip -dkc "$file")" && break
+	load_ipset "$config" "$type" "$(gzip -dkc "$file")" && break || rm -f "$file"
 }
 
 handle_source() {
@@ -198,9 +200,9 @@ handle_source() {
 
 	config_get type "$config" type "hash:net"
 	config_get ttl  "$source" ttl 360
-	config_list_foreach "$source" url handle_url "$config" "$type" "$ttl"
+	config_list_foreach "$source" url handle_url "$config" "$source" "$type" "$ttl"
 
-	if_ipset_exists "$config" || return $(error "No alive sources for $source [ipset: $config]")
+	if_ipset_exists "$config" || return $(error "${config}: found no alive sources for $source")
 }
 
 handle_entries() {
@@ -213,7 +215,7 @@ handle_entries() {
 	config_get source "$config" source
 
 	for entry in $entries; do
-		log info "Resolving and adding $entry..."
+		log info "${PALETTE_BOLD}${config}:${PALETTE_RESET} resolving and adding ${PALETTE_CYAN}$entry${PALETTE_RESET}..."
 		if_has_ip4_address "$entry" || entry="$(resolve_hostname "$entry")"
 		if_empty "$entry" || items="$items $entry"
 	done
@@ -235,13 +237,13 @@ handle_ipset() {
 	config_get source "$config" source
 	config_get entries "$config" entry
 
-	log info "Loading $config..."
-	if_empty "$source" "$entries" && return $(error "No source or entries defined [ipset: $config]")
+	log notice "${PALETTE_BOLD}${config}:${PALETTE_RESET} loading ipset..."
+	if_empty "$source" "$entries" && return $(error "${PALETTE_BOLD}${config}:${PALETTE_RESET} no source or entries defined")
 	before=$(count_ipset_entries "$config")
 	if_empty "$source"  || handle_source  "$config" "$source"
 	if_empty "$entries" || handle_entries "$config" "$entries"
 	after=$(count_ipset_entries "$config")
-	log info "$config: $(get_ipset_diff_message $before $after)"
+	log notice "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}ipset loaded $(get_ipset_diff_message $before $after)${PALETTE_RESET}"
 }
 
 antifilter_update() {
@@ -258,6 +260,8 @@ antifilter_add() {
 
 	if_enabled "$config" || return $(__true)
 
+	echo -e "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}adding ${entries}${PALETTE_RESET}"
+
 	for entry in $entries; do
 		uci_remove_list antifilter "$config" entry "$entry"
 		uci_add_list antifilter "$config" entry "$entry"
@@ -271,6 +275,8 @@ antifilter_delete() {
 	shift
 	local entries="$*"
 	local entry
+
+	echo -e "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}removing ${entries}${PALETTE_RESET}"
 
 	for entry in $entries; do
 		uci_remove_list antifilter "$config" entry "$entry"
@@ -289,20 +295,21 @@ antifilter_lookup() {
 	for entry in $entries; do
 
 		ipsets=
+		matches=0
 
 		if_has_ip4_address "$entry" || {
-			echo "Checking for $entry:"
+			echo -e "${PALETTE_REVERSE}${entry}: resolving...${PALETTE_RESET}"
 			antifilter_lookup "$(resolve_hostname "$entry")"
 			continue
 		}
 
 		for ipset in $(__ipsets); do
-			$IPSETQ test "$ipset" "$entry" && matches=$(( matches + 1 )) && ipsets="$ipsets, $ipset"
+			$IPSETQ test "$ipset" "$entry" && matches=$(( matches + 1 )) && ipsets="$ipsets, ${PALETTE_BOLD}$ipset${PALETTE_RESET}"
 		done
 
 		[ $matches -gt 0 ] &&
-			echo "$entry is listed in following blocklists: ${ipsets:2}." ||
-			echo "$entry is not listed in any blocklists."
+			echo -e "${PALETTE_BOLD}${entry}${PALETTE_RESET}: ${PALETTE_RED}listed in following IP sets: ${PALETTE_RESET}${ipsets:2}" ||
+			echo -e "${PALETTE_BOLD}${entry}${PALETTE_RESET}: ${PALETTE_GREEN}not listed in any IP sets${PALETTE_RESET}"
 
 	done
 }
@@ -313,7 +320,7 @@ antifilter_unload() {
 	local ipset
 
 	if_empty "$config" || {
-		if_ipset_exists "$config" || return $(error "ipset $config does not exists")
+		if_ipset_exists "$config" || return $(error "${PALETTE_BOLD}${config}:${PALETTE_RESET} ipset  does not exists")
 		ipsets="$config"
 	}
 
@@ -326,7 +333,7 @@ antifilter_dump() {
 	local ipset
 
 	if_empty "$config" || {
-		if_ipset_exists "$config" || return $(error "ipset $config does not exists")
+		if_ipset_exists "$config" || return $(error "${PALETTE_BOLD}${config}:${PALETTE_RESET} ipset does not exists")
 		ipsets="$config"
 	}
 
@@ -335,12 +342,13 @@ antifilter_dump() {
 
 antifilter_status() {
 	[ -f $PIDFILE ] &&
-		echo "Update service is running with pid $(cat $PIDFILE)" ||
-		echo "Update service is not running"
-	echo
+		echo -e "${PALETTE_BOLD}Service:${PALETTE_RESET}\n${PALETTE_GREEN}running (pid $(cat $PIDFILE))${PALETTE_RESET}\n" ||
+		echo -e "${PALETTE_BOLD}Service:${PALETTE_RESET}\n${PALETTE_RED}not running${PALETTE_RESET}\n"
 
-	echo Loaded ipsets:
-	for ipset in $(__ipsets); do echo "$ipset ($(count_ipset_entries "$ipset") entries)"; done
+	echo -e "${PALETTE_BOLD}IP sets:${PALETTE_RESET}"
+	for ipset in $(__ipsets); do
+		echo -e " - ${PALETTE_REVERSE}$ipset${PALETTE_RESET} ($(count_ipset_entries "$ipset") entries)"
+	done
 }
 
 antifilter_daemon() {
@@ -350,7 +358,7 @@ antifilter_daemon() {
 
 	config_get minutes antifilter interval 360
 
-	log info "Using update interval of $minutes minutes..."
+	log notice "update every $minutes minutes..."
 
 	while true; do
 		antifilter_update || exit $?

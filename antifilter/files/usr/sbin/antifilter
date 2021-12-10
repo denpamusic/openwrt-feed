@@ -61,6 +61,7 @@ status() {
 
 case "$1" in
 	start|stop|restart|add|delete|lookup|update|unload|dump|status)
+		. /lib/antifilter/palette.sh
 		"$@"
 	;;
 	--daemon)
