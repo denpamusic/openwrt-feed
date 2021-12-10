@@ -1,6 +1,6 @@
 #!/bin/sh
 
-. /lib/antifilter/antifilter.sh
+. /usr/lib/antifilter/antifilter.sh
 
 help() {
 	cat <<EOF
@@ -61,7 +61,7 @@ status() {
 
 case "$1" in
 	start|stop|restart|add|delete|lookup|update|unload|dump|status)
-		. /lib/antifilter/palette.sh
+		. /usr/lib/antifilter/palette.sh
 		"$@"
 	;;
 	--daemon)
