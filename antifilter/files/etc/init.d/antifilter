@@ -20,7 +20,7 @@ start_service() {
 }
 
 status() {
-	. /lib/antifilter/antifilter.sh
+	. /usr/lib/antifilter/antifilter.sh
 	antifilter_status
 }
 
@@ -38,7 +38,7 @@ clean_up() {
 }
 
 reload_service() {
-	. /lib/antifilter/antifilter.sh
+	. /usr/lib/antifilter/antifilter.sh
 	antifilter_update
 }
 
