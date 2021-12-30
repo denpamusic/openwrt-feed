@@ -8,13 +8,19 @@ IPSET="ipset -!"
 IPSETQ="ipset -! -q"
 NSLOOKUP=/usr/bin/nslookup
 IPV4_PATTERN="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
-PIDFILE=/var/run/antifilter.pid
+PIDFILE=/var/run/antifilterd.pid
 LOADED=
+DAEMON=0
+OPTS=
 
 __ipsets() {
 	if_empty "$LOADED" && config_foreach handle_loaded ipset
 
 	echo "$LOADED"
+}
+
+if_daemon() {
+	[ "$DAEMON" -eq 1 ]
 }
 
 handle_loaded() {
@@ -95,7 +101,7 @@ handle_url() {
 	md5sum=$(echo "$url" | md5sum | cut -d" " -f1)
 	file="$datadir/$md5sum.lst.gz"
 
-	if_file_older_than "$file" "$ttl" && {
+	if_file_older_than "$file" "$ttl" || if_list_has "forcecache" $OPTS && {
 		log info "${PALETTE_BOLD}${config}:${PALETTE_RESET} fetching ${PALETTE_GREEN}${source}${PALETTE_RESET} from ${PALETTE_GREEN}${url}${PALETTE_RESET}..."
 		$UCLIENT "$url" | gzip > "$file"
 	} || log info "${PALETTE_BOLD}${config}:${PALETTE_RESET} loading ${PALETTE_GREEN}${source}${PALETTE_RESET} from cached copy ${PALETTE_GREEN}${file##*/}${PALETTE_RESET}..."
@@ -166,11 +172,12 @@ antifilter_add() {
 	local config="$1"
 	shift
 	local entries="$*"
+	local entries_list=$(join_with ',' $entries | sed 's/,/, /g')
 	local entry
 
 	if_enabled "$config" || return $(__true)
 
-	echo -e "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}adding ${entries}${PALETTE_RESET}"
+	echo -e "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}adding ${entries_list}...${PALETTE_RESET}"
 
 	for entry in $entries; do
 		uci_remove_list antifilter "$config" entry "$entry"
@@ -184,9 +191,10 @@ antifilter_delete() {
 	local config="$1"
 	shift
 	local entries="$*"
+	local entries_list=$(join_with ',' $entries | sed 's/,/, /g')
 	local entry
 
-	echo -e "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}removing ${entries}${PALETTE_RESET}"
+	echo -e "${PALETTE_BOLD}${config}:${PALETTE_RESET} ${PALETTE_REVERSE}removing ${entries_list}...${PALETTE_RESET}"
 
 	for entry in $entries; do
 		uci_remove_list antifilter "$config" entry "$entry"
@@ -258,21 +266,6 @@ antifilter_status() {
 	echo -e "${PALETTE_BOLD}IP sets:${PALETTE_RESET}"
 	for ipset in $(__ipsets); do
 		echo -e " - ${PALETTE_REVERSE}$ipset${PALETTE_RESET} ($(count_ipset_entries "$ipset") entries)"
-	done
-}
-
-antifilter_daemon() {
-	local minutes
-
-	DAEMON=1
-
-	config_get minutes antifilter interval 360
-
-	log notice "update every $minutes minutes..."
-
-	while true; do
-		antifilter_update || exit $?
-		sleep $(( minutes * 60 ))
 	done
 }
 

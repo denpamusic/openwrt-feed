@@ -1,0 +1,20 @@
+#!/bin/sh
+
+. /usr/lib/antifilter/antifilter.sh
+
+DAEMON=1
+
+loop() {
+	local minutes
+
+	config_get minutes antifilter interval 360
+
+	log notice "update every $minutes minutes..."
+
+	while true; do
+		antifilter_update || return $?
+		sleep $(( minutes * 60 ))
+	done
+}
+
+loop || exit $?

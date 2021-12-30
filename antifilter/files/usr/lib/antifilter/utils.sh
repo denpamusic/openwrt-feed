@@ -1,7 +1,5 @@
 #!/bin/sh
 
-DAEMON=0
-
 __true() {
 	return 0
 }
@@ -50,10 +48,6 @@ if_has_ip4_address() {
 	echo "$case" | grep -Eq "$IPV4_PATTERN"
 }
 
-if_daemon() {
-	[ "$DAEMON" -eq 1 ]
-}
-
 if_file_older_than() {
 	local file="$1"
 	local age="$2"
@@ -84,10 +78,28 @@ if_enabled() {
 	[ $enabled -eq 1 ]
 }
 
+if_list_has() {
+	local needle="$1"
+	shift
+	local list="$*"
+
+	for item in $list; do
+		[ "$item" == "$needle" ] && return 0
+	done
+
+	return 1
+}
+
 resolve_hostname() {
 	local hostname="$1"
 	local ips=$($NSLOOKUP "$hostname" 2>/dev/null | grep -E "Address [0-9]+: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
 
 	if_empty "$ips" && return $(error "$hostname not found")
 	echo "$ips"
+}
+
+join_with() {
+	local IFS="$1";
+	shift;
+	echo "$*";
 }

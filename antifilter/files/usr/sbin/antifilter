@@ -4,7 +4,8 @@
 
 help() {
 	cat <<EOF
-Syntax: antifilter [command]
+usage: antifilter [options] sub-command
+
 Available commands:
 	start                        Start antifilter daemon
 	stop                         Stop antifilter daemon
@@ -16,6 +17,9 @@ Available commands:
 	unload <ipset>               Unload single or all ipsets
 	dump <ipset>                 Dump single or all ipsets
 	status                       List loaded ipsets
+
+Available options:
+	-f | --force-cache           Force update of local cache
 EOF
 }
 
@@ -59,17 +63,24 @@ status() {
 	antifilter_status
 }
 
-case "$1" in
-	start|stop|restart|add|delete|lookup|update|unload|dump|status)
-		. /usr/lib/antifilter/palette.sh
-		"$@"
-	;;
-	--daemon)
-		antifilter_daemon
-	;;
-	*)
-		help
-	;;
-esac
+while [ $# -gt 0 ]; do
+
+	case "$1" in
+		-f|--force-cache)
+			[ ! -z "$OPTS" ] && OPTS="$OPTS "; OPTS="${OPTS}forcecache"
+			shift
+		;;
+		start|stop|restart|add|delete|lookup|update|unload|dump|status)
+			. /usr/lib/antifilter/palette.sh
+			"$@"
+			break
+		;;
+		*)
+			help
+			exit 1
+		;;
+	esac
+
+done
 
 exit 0
