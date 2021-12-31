@@ -1,7 +1,7 @@
 #!/bin/sh
 
 . /lib/functions.sh
-. /lib/antifilter/utils.sh
+. /usr/lib/antifilter/utils.sh
 
 UCLIENT="uclient-fetch -qT 5 -O -"
 IPSET="ipset -!"
