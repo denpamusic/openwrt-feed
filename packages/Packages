@@ -1,0 +1,62 @@
+Package: antifilter
+Version: 1.1.1-1
+Depends: libc, ipset
+License: MIT
+Section: net
+Architecture: all
+Installed-Size: 4295
+Filename: antifilter_1.1.1-1_all.ipk
+Size: 5124
+SHA256sum: 03439fa5199606ab701465c6e8c0fcd2fa77c1236c5c9b59214e107dd9b913a3
+Description:  Antifilter ipset managment utility provides an easy way to manage and update
+ IP-lists from antifilter.download service and it's mirror sites.
+
+Package: lcdproc-cgminer
+Version: 1.0.6-1
+Depends: libc, lua, lua-cgminer, lua-lcdproc
+License: MIT
+Section: utils
+Architecture: all
+Installed-Size: 1627
+Filename: lcdproc-cgminer_1.0.6-1_all.ipk
+Size: 2446
+SHA256sum: 38c5567c29c66a81458ad0edb471346261f272e14641b673ae2bea8dc3c6ff74
+Description:  lcdproc client for cgminer written in lua.
+
+Package: lua-cgminer
+Version: 1.0.2-1
+Depends: libc, lua, luasocket, lua-cjson
+License: MIT
+Section: lang
+Architecture: all
+Installed-Size: 681
+Filename: lua-cgminer_1.0.2-1_all.ipk
+Size: 1443
+SHA256sum: 8d7ea5f5647571d4447a43ee6f300487e0428eec585f6ff8ced59f54a07bddcf
+Description:  Lua cgminer is simple cgminer API client.
+
+Package: lua-lcdproc
+Version: 1.0.9-1
+Depends: libc, lua, luasocket
+License: MIT
+Section: lang
+Architecture: all
+Installed-Size: 9660
+Filename: lua-lcdproc_1.0.9-1_all.ipk
+Size: 10409
+SHA256sum: 2349347c4041a567294527228e4a5733ec41f037ed76fa9ddff62481995f3ef6
+Description:  Lua lcdproc is simple lcdproc client.
+
+Package: vpngate
+Version: 1.0.2-2
+Depends: libc, coreutils, coreutils-shuf, openvpn
+License: MIT
+Section: net
+Architecture: all
+Installed-Size: 2643
+Filename: vpngate_1.0.2-2_all.ipk
+Size: 3496
+SHA256sum: ad50770f91ede05baddc06c58d6d2ab1c85dbab6f51e0daaad6f77917c438c63
+Description:  vpngate.net client allows to pull server list from vpngate.net public VPN
+ registry and select server based on country, score, maximum ping and uptime.
+
