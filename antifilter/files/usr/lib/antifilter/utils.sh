@@ -92,7 +92,7 @@ if_list_has() {
 
 resolve_hostname() {
 	local hostname="$1"
-	local ips=$($NSLOOKUP "$hostname" 2>/dev/null | grep -E "Address [0-9]+: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
+	local ips=$($NSLOOKUP -type=A "$hostname" 2>/dev/null | grep -E "Address: $IPV4_PATTERN" | cut -f2 -d":" | xargs)
 
 	if_empty "$ips" && return $(error "$hostname not found")
 	echo "$ips"
